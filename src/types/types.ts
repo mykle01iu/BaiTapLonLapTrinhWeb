@@ -20,3 +20,7 @@ export interface ChartData {
   value: number;
   color?: string;
 }
+export interface CategoryBudget {
+  category: string;     // Tên danh mục
+  limit: number;        // Định mức cho danh mục này
+}

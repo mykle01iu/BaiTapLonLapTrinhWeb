@@ -9,6 +9,25 @@ const Dashboard = () => {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const { transactions } = useExpenseStore();
 
+    const getCategoryWarning = (transaction: typeof transactions[0]) => {
+        const categoryBudget = useExpenseStore.getState().getCategoryBudget(transaction.category);
+        if (transaction.type === 'expense' && categoryBudget > 0) {
+            const now = new Date();
+            const tDate = new Date(transaction.date);
+            if (tDate.getMonth() === now.getMonth() && tDate.getFullYear() === now.getFullYear()) {
+                const spent = useExpenseStore.getState().getTotalCategoryExpenses(transaction.category);
+                const percentage = (spent / categoryBudget) * 100;
+
+                if (percentage > 100) {
+                    return <span className="text-xs text-red-500 font-bold" title="Đã vượt định mức">⚠️</span>;
+                } else if (percentage > 80) {
+                    return <span className="text-xs text-yellow-500 font-bold" title="Gần vượt định mức">⚠️</span>;
+                }
+            }
+        }
+        return null;
+    };
+
     return (
         <div className="space-y-6 pb-10">
             {/* 1. Header: Tiêu đề + Nút thêm mới */}
@@ -65,9 +84,12 @@ const Dashboard = () => {
                                             <tr key={t.id} className="hover:bg-blue-50/50 transition-colors">
                                                 <td className="px-6 py-4 text-sm text-gray-600 whitespace-nowrap">{t.date}</td>
                                                 <td className="px-6 py-4 text-sm font-medium text-gray-800">
-                                                    <span className="px-2 py-1 rounded bg-gray-100 text-gray-600 text-xs border border-gray-200">
-                                                        {t.category}
-                                                    </span>
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="px-2 py-1 rounded bg-gray-100 text-gray-600 text-xs border border-gray-200">
+                                                            {t.category}
+                                                        </span>
+                                                        {getCategoryWarning(t)}
+                                                    </div>
                                                 </td>
                                                 <td className="px-6 py-4 text-sm text-gray-500 max-w-[200px] truncate" title={t.note}>
                                                     {t.note || '-'}

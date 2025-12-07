@@ -1,13 +1,20 @@
-import { useState } from 'react';
-import { Search, Trash2, ArrowUpCircle, ArrowDownCircle, Filter } from 'lucide-react';
+import { useState, useMemo } from 'react';
+import { Search, Trash2, ArrowUpCircle, ArrowDownCircle, Filter, ChevronDown, ChevronRight } from 'lucide-react';
 import { useExpenseStore } from '../store/useExpenseStore';
+import { CategoryDetailModal } from '../components/CategoryDetailModal';
 
 const Transactions = () => {
   const { transactions, removeTransaction } = useExpenseStore();
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState<'all' | 'expense' | 'income'>('all');
+  const [expandedCategories, setExpandedCategories] = useState<string[]>([]);
+  const [selectedCategory, setSelectedCategory] = useState<{
+    category: string;
+    month: string;
+    type: 'expense' | 'income';
+  } | null>(null);
 
-  // Logic lọc dữ liệu: Vừa theo từ khóa tìm kiếm, vừa theo loại (Thu/Chi)
+  // Logic lọc dữ liệu
   const filteredTransactions = transactions.filter((t) => {
     const matchesSearch = 
       t.note?.toLowerCase().includes(searchTerm.toLowerCase()) || 
@@ -18,10 +25,70 @@ const Transactions = () => {
     return matchesSearch && matchesType;
   });
 
-  const handleDelete = (id: string) => {
+  // Nhóm giao dịch theo danh mục và tháng
+  const groupedTransactions = useMemo(() => {
+    const groups: Record<string, {
+      category: string;
+      type: 'expense' | 'income';
+      total: number;
+      month: string; // Format: "YYYY-MM"
+      monthDisplay: string; // Format: "Tháng MM/YYYY"
+      transactions: typeof transactions;
+    }> = {};
+
+    filteredTransactions.forEach((t) => {
+      const date = new Date(t.date);
+      const year = date.getFullYear();
+      const month = date.getMonth() + 1;
+      const monthKey = `${year}-${month.toString().padStart(2, '0')}`;
+      const monthDisplay = `Tháng ${month}/${year}`;
+      const groupKey = `${t.category}-${monthKey}-${t.type}`;
+
+      if (!groups[groupKey]) {
+        groups[groupKey] = {
+          category: t.category,
+          type: t.type,
+          total: 0,
+          month: monthKey,
+          monthDisplay,
+          transactions: [],
+        };
+      }
+
+      groups[groupKey].total += t.amount;
+      groups[groupKey].transactions.push(t);
+    });
+
+    // Sắp xếp các nhóm theo tháng (mới nhất trước) và tổng tiền
+    return Object.values(groups)
+      .sort((a, b) => {
+        if (a.month !== b.month) return b.month.localeCompare(a.month);
+        if (a.type !== b.type) return a.type === 'expense' ? -1 : 1;
+        return b.total - a.total;
+      });
+  }, [filteredTransactions]);
+
+  // Toggle mở/đóng danh mục
+  const toggleCategory = (categoryKey: string) => {
+    setExpandedCategories(prev =>
+      prev.includes(categoryKey)
+        ? prev.filter(key => key !== categoryKey)
+        : [...prev, categoryKey]
+    );
+  };
+
+  // Xử lý xóa giao dịch
+  const handleDelete = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation(); // Ngăn chặn toggle khi click xóa
     if (window.confirm('Bạn có chắc muốn xóa giao dịch này không?')) {
       removeTransaction(id);
     }
+  };
+
+  // Hàm mở modal xem chi tiết
+  const handleViewDetails = (category: string, month: string, type: 'expense' | 'income', e: React.MouseEvent) => {
+    e.stopPropagation();
+    setSelectedCategory({ category, month, type });
   };
 
   return (
@@ -70,59 +137,178 @@ const Transactions = () => {
         </div>
       </div>
 
-      {/* Danh sách giao dịch */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-        {filteredTransactions.length === 0 ? (
-          <div className="p-12 text-center text-gray-400">
+      {/* Danh sách giao dịch theo nhóm */}
+      <div className="space-y-4">
+        {groupedTransactions.length === 0 ? (
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-12 text-center text-gray-400">
             <Filter className="mx-auto mb-3 opacity-20" size={48} />
             <p>Không tìm thấy giao dịch nào phù hợp.</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left">
-              <thead className="bg-gray-50 text-gray-500 text-xs uppercase font-semibold">
-                <tr>
-                  <th className="px-6 py-4">Loại</th>
-                  <th className="px-6 py-4">Ngày</th>
-                  <th className="px-6 py-4">Danh mục & Ghi chú</th>
-                  <th className="px-6 py-4 text-right">Số tiền</th>
-                  <th className="px-6 py-4 text-center">Hành động</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {filteredTransactions.map((t) => (
-                  <tr key={t.id} className="hover:bg-gray-50 transition-colors group">
-                    <td className="px-6 py-4">
-                      {t.type === 'income' ? (
-                        <ArrowUpCircle className="text-green-500" size={24} />
-                      ) : (
-                        <ArrowDownCircle className="text-red-500" size={24} />
-                      )}
-                    </td>
-                    <td className="px-6 py-4 text-sm text-gray-600 whitespace-nowrap">{t.date}</td>
-                    <td className="px-6 py-4">
-                      <div className="font-medium text-gray-800">{t.category}</div>
-                      <div className="text-sm text-gray-500">{t.note}</div>
-                    </td>
-                    <td className={`px-6 py-4 text-sm font-bold text-right whitespace-nowrap ${t.type === 'expense' ? 'text-red-500' : 'text-green-500'}`}>
-                      {t.type === 'expense' ? '-' : '+'}{t.amount.toLocaleString('vi-VN')} đ
-                    </td>
-                    <td className="px-6 py-4 text-center">
-                      <button 
-                        onClick={() => handleDelete(t.id)}
-                        className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
-                        title="Xóa giao dịch"
+          groupedTransactions.map((group) => {
+            const groupKey = `${group.category}-${group.month}-${group.type}`;
+            const isExpanded = expandedCategories.includes(groupKey);
+            
+            return (
+              <div key={groupKey} className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                {/* Header của nhóm */}
+                <div 
+                  className={`p-4 border-b border-gray-100 cursor-pointer hover:bg-gray-50 transition-colors ${
+                    isExpanded ? 'bg-gray-50' : ''
+                  }`}
+                  onClick={() => toggleCategory(groupKey)}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className={`p-2 rounded-lg ${
+                        group.type === 'income' 
+                          ? 'bg-green-100 text-green-600' 
+                          : 'bg-red-100 text-red-600'
+                      }`}>
+                        {group.type === 'income' ? (
+                          <ArrowUpCircle size={20} />
+                        ) : (
+                          <ArrowDownCircle size={20} />
+                        )}
+                      </div>
+                      <div>
+                        <h3 className="font-bold text-gray-800">
+                          {group.category}
+                          <span className="ml-2 text-sm font-normal text-gray-500">
+                            ({group.monthDisplay})
+                          </span>
+                        </h3>
+                        <p className="text-sm text-gray-500">
+                          {group.transactions.length} giao dịch
+                        </p>
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-center gap-4">
+                      <span className={`text-lg font-bold ${
+                        group.type === 'expense' ? 'text-red-500' : 'text-green-500'
+                      }`}>
+                        {group.type === 'expense' ? '-' : '+'}{group.total.toLocaleString('vi-VN')} đ
+                      </span>
+                      <button
+                        onClick={(e) => handleViewDetails(group.category, group.month, group.type, e)}
+                        className="px-3 py-1.5 text-sm bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg font-medium transition-colors"
                       >
-                        <Trash2 size={18} />
+                        Xem chi tiết
                       </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                      {isExpanded ? (
+                        <ChevronDown className="text-gray-400" size={20} />
+                      ) : (
+                        <ChevronRight className="text-gray-400" size={20} />
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Chi tiết giao dịch (chỉ hiển thị khi expanded) */}
+                {isExpanded && (
+                  <div className="divide-y divide-gray-100">
+                    <div className="grid grid-cols-12 gap-4 p-4 text-sm text-gray-500 bg-gray-50">
+                      <div className="col-span-2 font-semibold">Ngày</div>
+                      <div className="col-span-5 font-semibold">Ghi chú</div>
+                      <div className="col-span-3 font-semibold text-right">Số tiền</div>
+                      <div className="col-span-2 font-semibold text-center">Hành động</div>
+                    </div>
+                    
+                    {group.transactions
+                      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+                      .map((t) => (
+                        <div key={t.id} className="grid grid-cols-12 gap-4 p-4 hover:bg-gray-50 transition-colors items-center">
+                          <div className="col-span-2 text-sm text-gray-600">
+                            {t.date}
+                          </div>
+                          <div className="col-span-5">
+                            <div className="text-gray-800">{t.note || <span className="text-gray-400">Không có ghi chú</span>}</div>
+                          </div>
+                          <div className="col-span-3 text-right">
+                            <span className={`text-sm font-bold ${t.type === 'expense' ? 'text-red-500' : 'text-green-500'}`}>
+                              {t.type === 'expense' ? '-' : '+'}{t.amount.toLocaleString('vi-VN')} đ
+                            </span>
+                          </div>
+                          <div className="col-span-2 text-center">
+                            <button 
+                              onClick={(e) => handleDelete(t.id, e)}
+                              className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                              title="Xóa giao dịch"
+                            >
+                              <Trash2 size={18} />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    
+                    {/* Tổng kết nhóm */}
+                    <div className="p-4 bg-blue-50 border-t border-blue-100">
+                      <div className="flex justify-between items-center">
+                        <div className="text-sm text-blue-700">
+                          Tổng cộng cho "{group.category}" trong {group.monthDisplay}:
+                        </div>
+                        <div className={`text-lg font-bold ${
+                          group.type === 'expense' ? 'text-red-600' : 'text-green-600'
+                        }`}>
+                          {group.type === 'expense' ? '-' : '+'}{group.total.toLocaleString('vi-VN')} đ
+                        </div>
+                      </div>
+                      
+                      {/* Hiển thị định mức nếu có (chỉ cho chi tiêu) */}
+                      {group.type === 'expense' && (() => {
+                        const getCategoryBudget = useExpenseStore.getState().getCategoryBudget;
+                        const categoryBudget = getCategoryBudget(group.category);
+                        
+                        if (categoryBudget > 0) {
+                          const percentage = (group.total / categoryBudget) * 100;
+                          const isOver = group.total > categoryBudget;
+                          
+                          return (
+                            <div className="mt-2">
+                              <div className="flex justify-between items-center text-sm">
+                                <span className="text-gray-600">Định mức: {categoryBudget.toLocaleString()}đ</span>
+                                <span className={`font-bold ${isOver ? 'text-red-600' : 'text-green-600'}`}>
+                                  {percentage.toFixed(1)}% sử dụng
+                                </span>
+                              </div>
+                              <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden mt-1">
+                                <div 
+                                  className={`h-full ${
+                                    isOver ? 'bg-red-500' : percentage > 80 ? 'bg-yellow-500' : 'bg-green-500'
+                                  }`}
+                                  style={{ width: `${Math.min(percentage, 100)}%` }}
+                                />
+                              </div>
+                              {isOver && (
+                                <div className="text-xs text-red-600 font-medium mt-1">
+                                  ⚠️ Đã vượt định mức {Math.abs(categoryBudget - group.total).toLocaleString()}đ
+                                </div>
+                              )}
+                            </div>
+                          );
+                        }
+                        return null;
+                      })()}
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })
         )}
       </div>
+
+      {/* Modal xem chi tiết */}
+      {selectedCategory && (
+        <CategoryDetailModal
+          isOpen={!!selectedCategory}
+          onClose={() => setSelectedCategory(null)}
+          category={selectedCategory.category}
+          month={selectedCategory.month}
+          type={selectedCategory.type}
+        />
+      )}
     </div>
   );
 };

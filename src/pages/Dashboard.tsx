@@ -1,56 +1,86 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Plus } from 'lucide-react';
 import { useExpenseStore } from '../store/useExpenseStore';
 import { AddTransactionModal } from '../components/AddTransactionModal';
 import { BudgetCard } from '../components/BudgetCard';
 import { ExpenseChart } from '../components/ExpenseChart';
+import { CategoryBudgetStatus } from '../components/CategoryBudgetStatus';
+import { NavLink } from 'react-router-dom';
 
 const Dashboard = () => {
     const [isModalOpen, setIsModalOpen] = useState(false);
-    const { transactions } = useExpenseStore();
+    const { 
+        transactions, 
+        getCategoryBudget, 
+        getTotalCategoryExpenses 
+    } = useExpenseStore();
 
-    const getCategoryWarning = (transaction: typeof transactions[0]) => {
-        const categoryBudget = useExpenseStore.getState().getCategoryBudget(transaction.category);
-        if (transaction.type === 'expense' && categoryBudget > 0) {
-            const now = new Date();
-            const tDate = new Date(transaction.date);
-            if (tDate.getMonth() === now.getMonth() && tDate.getFullYear() === now.getFullYear()) {
-                const spent = useExpenseStore.getState().getTotalCategoryExpenses(transaction.category);
-                const percentage = (spent / categoryBudget) * 100;
+    // Dùng useMemo để tính toán warning map
+    const transactionWarnings = useMemo(() => {
+        const warnings: Record<string, JSX.Element | null> = {};
+        const now = new Date();
+        const currentMonth = now.getMonth();
+        const currentYear = now.getFullYear();
 
-                if (percentage > 100) {
-                    return <span className="text-xs text-red-500 font-bold" title="Đã vượt định mức">⚠️</span>;
-                } else if (percentage > 80) {
-                    return <span className="text-xs text-yellow-500 font-bold" title="Gần vượt định mức">⚠️</span>;
+        transactions.forEach(t => {
+            let warning: JSX.Element | null = null;
+            
+            if (t.type === 'expense') {
+                const budget = getCategoryBudget(t.category);
+                const tDate = new Date(t.date);
+                
+                if (budget > 0 && 
+                    tDate.getMonth() === currentMonth && 
+                    tDate.getFullYear() === currentYear) {
+                    
+                    const spent = getTotalCategoryExpenses(t.category, currentMonth, currentYear);
+                    const percentage = (spent / budget) * 100;
+                    
+                    if (percentage > 100) {
+                        warning = <span className="text-xs text-red-500 font-bold" title="Đã vượt định mức">⚠️</span>;
+                    } else if (percentage > 80) {
+                        warning = <span className="text-xs text-yellow-500 font-bold" title="Gần vượt định mức">⚠️</span>;
+                    }
                 }
             }
-        }
-        return null;
-    };
+            warnings[t.id] = warning;
+        });
+
+        return warnings;
+    }, [transactions, getCategoryBudget, getTotalCategoryExpenses]);
+
 
     return (
         <div className="space-y-6 pb-10">
             {/* 1. Header: Tiêu đề + Nút thêm mới */}
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+            <header className="mb-8 p-4 bg-white rounded-xl shadow-lg border border-gray-100 flex justify-between items-center">
                 <div>
                     <h2 className="text-2xl font-bold text-gray-800">Tổng quan tài chính</h2>
-                    <p className="text-gray-500 text-sm">Quản lý chi tiêu hiệu quả với DinhKhaiQuanLy</p>
+                    <p className="text-gray-500 text-sm mt-1">Nắm bắt chi tiêu nhanh chóng trong tháng này.</p>
                 </div>
 
                 <button
                     onClick={() => setIsModalOpen(true)}
-                    className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl font-medium shadow-lg shadow-blue-200 flex items-center gap-2 transition-all w-full sm:w-auto justify-center"
+                    className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl font-semibold shadow-lg shadow-blue-300/60 flex items-center gap-2 transition-all active:scale-[0.98]"
                 >
                     <Plus size={20} />
                     Thêm khoản chi
                 </button>
-            </div>
+            </header>
 
-            {/* 2. GRID LAYOUT: Chia màn hình làm 2 cột */}
+            {/* 2. GRID LAYOUT: Chia màn hình làm 3 cột */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
-                {/* CỘT TRÁI (Chiếm 2 phần): Danh sách giao dịch */}
+                {/* CỘT PHẢI (Chiếm 1 phần): Ngân sách & Biểu đồ -> Đặt lên đầu */}
+                <div className="space-y-6 flex flex-col lg:col-span-1">
+                    <BudgetCard /> 
+                    <ExpenseChart /> 
+                </div>
+
+                {/* CỘT TRÁI (Chiếm 2 phần): Giao dịch gần đây và Trạng thái Định mức */}
                 <div className="lg:col-span-2 space-y-6">
+                    
+                    {/* Bảng giao dịch gần đây */}
                     <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
                         <div className="p-5 border-b border-gray-50 flex justify-between items-center bg-gray-50/50">
                             <h3 className="font-bold text-gray-700">Giao dịch gần đây</h3>
@@ -80,7 +110,7 @@ const Dashboard = () => {
                                             </td>
                                         </tr>
                                     ) : (
-                                        transactions.map((t) => (
+                                        transactions.slice(0, 10).map((t) => ( 
                                             <tr key={t.id} className="hover:bg-blue-50/50 transition-colors">
                                                 <td className="px-6 py-4 text-sm text-gray-600 whitespace-nowrap">{t.date}</td>
                                                 <td className="px-6 py-4 text-sm font-medium text-gray-800">
@@ -88,7 +118,7 @@ const Dashboard = () => {
                                                         <span className="px-2 py-1 rounded bg-gray-100 text-gray-600 text-xs border border-gray-200">
                                                             {t.category}
                                                         </span>
-                                                        {getCategoryWarning(t)}
+                                                        {transactionWarnings[t.id]}
                                                     </div>
                                                 </td>
                                                 <td className="px-6 py-4 text-sm text-gray-500 max-w-[200px] truncate" title={t.note}>
@@ -103,16 +133,18 @@ const Dashboard = () => {
                                 </tbody>
                             </table>
                         </div>
+                        
+                        {/* Nút xem tất cả ở dưới bảng */}
+                        <div className="p-4 border-t border-gray-100 text-center">
+                             <NavLink to="/transactions" className="text-sm font-medium text-blue-600 hover:text-blue-700">
+                                Xem tất cả giao dịch →
+                            </NavLink>
+                        </div>
                     </div>
-                </div>
+                    
+                    {/* Component trạng thái định mức danh mục */}
+                    <CategoryBudgetStatus /> 
 
-                {/* CỘT PHẢI (Chiếm 1 phần): Ngân sách & Biểu đồ */}
-                <div className="space-y-6 flex flex-col">
-                    {/* Component Thanh Ngân sách */}
-                    <BudgetCard />
-
-                    {/* Component Biểu đồ tròn */}
-                    <ExpenseChart />
                 </div>
             </div>
 

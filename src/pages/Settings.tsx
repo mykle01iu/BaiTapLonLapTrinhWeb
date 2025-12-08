@@ -1,48 +1,37 @@
-import { useState, useEffect } from 'react';
-import { Save, Trash2, AlertTriangle, Plus, Edit2, X } from 'lucide-react';
+import { useState } from 'react';
+import { Save, Trash2, AlertTriangle, Plus, Edit2, X, DollarSign, CreditCard } from 'lucide-react';
 import { useExpenseStore } from '../store/useExpenseStore';
 import type { CategoryBudget } from '../types/types';
 
 const Settings = () => {
   const { 
-    budgetLimit, 
-    setBudget, 
     categoryBudgets, 
-    setCategoryBudgets,
+    setCategoryBudgets, 
     addCategoryBudget, 
     updateCategoryBudget, 
-    removeCategoryBudget 
+    removeCategoryBudget, 
+    getTotalCategoryLimit, 
+    getTotalCategoryExpenses,
+    getCategoryExpensePercentage,
+    addNotification
   } = useExpenseStore();
   
-  const [limitInput, setLimitInput] = useState(budgetLimit.toString());
   const [categoryModalOpen, setCategoryModalOpen] = useState(false);
   const [editingCategory, setEditingCategory] = useState<string | null>(null);
+  
   const [categoryName, setCategoryName] = useState('');
   const [categoryLimit, setCategoryLimit] = useState('');
+  const [customCategoryName, setCustomCategoryName] = useState(''); 
 
-  // Danh sách danh mục có sẵn
   const availableCategories = [
     'Ăn uống', 'Di chuyển', 'Thuê nhà', 'Giải trí', 'Mua sắm', 
     'Y tế', 'Giáo dục', 'Hóa đơn', 'Khác'
   ];
 
-  useEffect(() => {
-    setLimitInput(budgetLimit.toString());
-  }, [budgetLimit]);
-
-  const handleSave = () => {
-    const value = Number(limitInput);
-    if (value > 0) {
-      setBudget(value);
-      alert('Đã cập nhật định mức chi tiêu thành công!');
-    } else {
-      alert('Vui lòng nhập số tiền hợp lệ!');
-    }
-  };
-
   const handleResetData = () => {
-    if (confirm('Bạn có chắc chắn muốn xóa TOÀN BỘ dữ liệu không? Hành động này không thể hoàn tác!')) {
+    if (window.confirm('Bạn có chắc chắn muốn xóa TOÀN BỘ dữ liệu không? Hành động này không thể hoàn tác!')) {
       localStorage.removeItem('expense-storage');
+      alert('Đã xóa toàn bộ dữ liệu. Ứng dụng sẽ tải lại.'); 
       window.location.reload();
     }
   };
@@ -51,49 +40,78 @@ const Settings = () => {
     if (category) {
       const budget = categoryBudgets.find(cb => cb.category === category);
       setEditingCategory(category);
-      setCategoryName(category);
-      setCategoryLimit(budget ? budget.limit.toString() : '');
+      setCategoryName(category); // Đặt tên hiện tại
+      setCategoryLimit(budget ? budget.limit.toLocaleString('vi-VN').replace(/\./g, '') : ''); 
+      setCustomCategoryName(''); 
     } else {
       setEditingCategory(null);
       setCategoryName('');
       setCategoryLimit('');
+      setCustomCategoryName('');
     }
     setCategoryModalOpen(true);
   };
 
   const handleSaveCategory = () => {
-    if (!categoryName || !categoryLimit) {
-      alert('Vui lòng nhập đầy đủ thông tin!');
-      return;
-    }
-
-    const limit = Number(categoryLimit);
-    if (limit <= 0) {
-      alert('Định mức phải lớn hơn 0!');
-      return;
-    }
-
+    
+    // 1. Xác định TÊN DANH MỤC CUỐI CÙNG được lưu (Nếu đang sửa, dùng categoryName; nếu tạo mới từ custom, dùng customCategoryName)
+    let categoryToSave = '';
     if (editingCategory) {
-      updateCategoryBudget(categoryName, limit);
+        categoryToSave = categoryName.trim();
+    } else if (categoryName === 'custom') {
+        categoryToSave = customCategoryName.trim();
     } else {
-      addCategoryBudget(categoryName, limit);
+        categoryToSave = categoryName.trim();
     }
+
+
+    if (!categoryToSave || !categoryLimit) {
+      addNotification('Vui lòng nhập đầy đủ thông tin!', 'warning');
+      return;
+    }
+
+    // 2. Format tiền
+    const limit = Number(categoryLimit.replace(/\./g, '')); 
+    
+    if (limit <= 0) {
+      addNotification('Định mức phải lớn hơn 0!', 'error');
+      return;
+    }
+    
+    if (!categoryToSave || categoryToSave === 'custom') { 
+        addNotification('Vui lòng nhập tên danh mục hợp lệ!', 'error');
+        return;
+    }
+    
+    // LOGIC LƯU (Đã được đơn giản hóa)
+    if (editingCategory) {
+        // Nếu tên danh mục đã bị đổi, cần xóa bản cũ và thêm bản mới (Đây là cách xử lý việc đổi key trong zustand)
+        if (editingCategory !== categoryToSave) {
+            removeCategoryBudget(editingCategory);
+            addCategoryBudget(categoryToSave, limit);
+        } else {
+            updateCategoryBudget(categoryToSave, limit);
+        }
+    } else {
+      addCategoryBudget(categoryToSave, limit);
+    }
+
 
     setCategoryModalOpen(false);
     setCategoryName('');
     setCategoryLimit('');
+    setCustomCategoryName('');
     setEditingCategory(null);
     
-    alert(`Đã ${editingCategory ? 'cập nhật' : 'thêm'} định mức cho "${categoryName}"!`);
+    addNotification(`Đã ${editingCategory ? 'cập nhật' : 'thêm'} định mức cho "${categoryToSave}"!`, 'success');
   };
 
   const handleDeleteCategory = (category: string) => {
-    if (confirm(`Bạn có chắc muốn xóa định mức cho "${category}"?`)) {
+    if (window.confirm(`Bạn có chắc muốn xóa định mức cho "${category}"?`)) {
       removeCategoryBudget(category);
     }
   };
 
-  // Thêm định mức mẫu
   const handleAddSampleBudgets = () => {
     const sampleBudgets: CategoryBudget[] = [
       { category: 'Ăn uống', limit: 3000000 },
@@ -103,7 +121,6 @@ const Settings = () => {
       { category: 'Mua sắm', limit: 2000000 },
     ];
     
-    // Thêm chỉ những danh mục chưa có định mức
     const existingCategories = categoryBudgets.map(cb => cb.category);
     const newBudgets = sampleBudgets.filter(
       budget => !existingCategories.includes(budget.category)
@@ -111,11 +128,13 @@ const Settings = () => {
     
     if (newBudgets.length > 0) {
       setCategoryBudgets([...categoryBudgets, ...newBudgets]);
-      alert(`Đã thêm ${newBudgets.length} định mức mẫu!`);
+      addNotification(`Đã thêm ${newBudgets.length} định mức mẫu!`, 'success');
     } else {
-      alert('Tất cả định mức mẫu đã được thêm trước đó!');
+      addNotification('Tất cả định mức mẫu đã được thêm trước đó!', 'warning');
     }
   };
+
+  const totalBudget = getTotalCategoryLimit();
 
   return (
     <div className="space-y-6 max-w-4xl">
@@ -125,33 +144,19 @@ const Settings = () => {
       </div>
 
       {/* Card 1: Định mức tổng */}
-      <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-        <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
-          💰 Định mức chi tiêu tổng tháng
+      <div className="bg-white p-6 rounded-xl shadow-sm border border-blue-100">
+        <h3 className="text-lg font-bold text-blue-800 mb-4 flex items-center gap-2">
+          💰 Tổng Ngân sách Chi tiêu Tháng
         </h3>
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Tổng ngân sách hàng tháng (VNĐ)
-            </label>
-            <input
-              type="number"
-              value={limitInput}
-              onChange={(e) => setLimitInput(e.target.value)}
-              className="w-full px-4 py-3 rounded-lg border border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none font-bold text-gray-800"
-              min="0"
-            />
-            <p className="mt-2 text-xs text-gray-500">
-              * Hệ thống sẽ cảnh báo khi tổng chi tiêu vượt quá số tiền này.
-            </p>
+        <div className="flex justify-between items-center bg-blue-50 p-4 rounded-lg">
+          <div className="text-sm text-blue-600">Tổng định mức từ Danh mục</div>
+          <div className="text-2xl font-bold text-blue-800">
+            {totalBudget.toLocaleString('vi-VN')} <span className="text-base font-normal">VNĐ</span>
           </div>
-          <button
-            onClick={handleSave}
-            className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium flex items-center gap-2 transition-all"
-          >
-            <Save size={18} /> Lưu định mức tổng
-          </button>
         </div>
+        <p className="mt-4 text-xs text-gray-500">
+          * Tổng ngân sách tháng được tính bằng tổng định mức của tất cả các danh mục chi tiêu bạn thiết lập bên dưới.
+        </p>
       </div>
 
       {/* Card 2: Định mức theo danh mục */}
@@ -159,7 +164,7 @@ const Settings = () => {
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
           <div>
             <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
-              📊 Định mức theo danh mục
+              <CreditCard size={20} className="text-green-500" /> Định mức theo danh mục
             </h3>
             <p className="text-sm text-gray-600 mt-1">
               Thiết lập giới hạn chi tiêu cho từng danh mục cụ thể
@@ -195,8 +200,8 @@ const Settings = () => {
         ) : (
           <div className="space-y-4">
             {categoryBudgets.map((budget, index) => {
-              const spent = useExpenseStore.getState().getTotalCategoryExpenses(budget.category);
-              const percentage = useExpenseStore.getState().getCategoryExpensePercentage(budget.category);
+              const spent = getTotalCategoryExpenses(budget.category);
+              const percentage = getCategoryExpensePercentage(budget.category);
               
               let colorClass = 'bg-green-500';
               let textColor = 'text-green-600';
@@ -219,8 +224,8 @@ const Settings = () => {
                         </span>
                       </div>
                       <div className="text-sm text-gray-500 mb-2">
-                        Định mức: <span className="font-bold">{budget.limit.toLocaleString()}đ</span> | 
-                        Đã chi: <span className="font-bold">{spent.toLocaleString()}đ</span>
+                        Định mức: <span className="font-bold">{budget.limit.toLocaleString('vi-VN')}đ</span> | 
+                        Đã chi: <span className="font-bold">{spent.toLocaleString('vi-VN')}đ</span>
                       </div>
                     </div>
                     <div className="flex gap-1 ml-4">
@@ -274,25 +279,16 @@ const Settings = () => {
             <div className="bg-blue-50 p-4 rounded-lg">
               <div className="text-sm text-blue-600 mb-1">Tổng định mức danh mục</div>
               <div className="text-2xl font-bold text-blue-800">
-                {categoryBudgets.reduce((sum, cb) => sum + cb.limit, 0).toLocaleString()}đ
+                {totalBudget.toLocaleString('vi-VN')}đ
               </div>
             </div>
             <div className="bg-green-50 p-4 rounded-lg">
-              <div className="text-sm text-green-600 mb-1">Tổng định mức tháng</div>
+              <div className="text-sm text-green-600 mb-1">Tổng số danh mục</div>
               <div className="text-2xl font-bold text-green-800">
-                {budgetLimit.toLocaleString()}đ
+                {categoryBudgets.length}
               </div>
             </div>
           </div>
-          
-          {categoryBudgets.reduce((sum, cb) => sum + cb.limit, 0) > budgetLimit && (
-            <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-              <div className="flex items-center gap-2 text-yellow-700 text-sm">
-                <AlertTriangle size={16} />
-                <span>Tổng định mức danh mục ({categoryBudgets.reduce((sum, cb) => sum + cb.limit, 0).toLocaleString()}đ) lớn hơn định mức tháng ({budgetLimit.toLocaleString()}đ)</span>
-              </div>
-            </div>
-          )}
         </div>
       )}
 
@@ -315,17 +311,22 @@ const Settings = () => {
                   Danh mục
                 </label>
                 {editingCategory ? (
-                  <input
-                    type="text"
-                    value={categoryName}
-                    onChange={(e) => setCategoryName(e.target.value)}
-                    className="w-full px-4 py-2.5 rounded-lg border border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none"
-                    placeholder="Nhập tên danh mục"
-                  />
+                    <input
+                        type="text"
+                        value={categoryName}
+                        onChange={(e) => setCategoryName(e.target.value)} // CHO PHÉP SỬA TÊN
+                        className="w-full px-4 py-2.5 rounded-lg border border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none"
+                        placeholder="Nhập tên danh mục mới"
+                    />
                 ) : (
                   <select
-                    value={categoryName}
-                    onChange={(e) => setCategoryName(e.target.value)}
+                    value={categoryName} 
+                    onChange={(e) => {
+                        setCategoryName(e.target.value);
+                        if (e.target.value !== 'custom') {
+                            setCustomCategoryName('');
+                        }
+                    }}
                     className="w-full px-4 py-2.5 rounded-lg border border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none bg-white cursor-pointer"
                   >
                     <option value="">Chọn danh mục</option>
@@ -338,11 +339,12 @@ const Settings = () => {
                   </select>
                 )}
                 
+                {/* INPUT DÀNH RIÊNG CHO TRƯỜNG HỢP TỰ NHẬP */}
                 {categoryName === 'custom' && (
                   <input
                     type="text"
-                    value={categoryName === 'custom' ? '' : categoryName}
-                    onChange={(e) => setCategoryName(e.target.value)}
+                    value={customCategoryName} 
+                    onChange={(e) => setCustomCategoryName(e.target.value)}
                     className="w-full mt-2 px-4 py-2.5 rounded-lg border border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none"
                     placeholder="Nhập tên danh mục mới"
                   />
@@ -354,13 +356,21 @@ const Settings = () => {
                   Định mức (VNĐ)
                 </label>
                 <input
-                  type="number"
+                  type="text"
                   value={categoryLimit}
-                  onChange={(e) => setCategoryLimit(e.target.value)}
+                  onChange={(e) => {
+                    const raw = e.target.value.replace(/\D/g, '');
+                    setCategoryLimit(raw ? Number(raw).toLocaleString('vi-VN') : '');
+                  }}
+                  onBlur={(e) => {
+                      const raw = e.target.value.replace(/\./g, '');
+                      setCategoryLimit(Number(raw).toLocaleString('vi-VN'));
+                  }}
+                  onFocus={(e) => {
+                      setCategoryLimit(e.target.value.replace(/\./g, ''));
+                  }}
                   className="w-full px-4 py-2.5 rounded-lg border border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none font-bold"
                   placeholder="Nhập số tiền"
-                  min="1000"
-                  step="1000"
                 />
                 <p className="text-xs text-gray-500 mt-1">* Nhập số tiền tối thiểu 1,000đ</p>
               </div>

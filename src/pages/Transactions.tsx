@@ -1,38 +1,42 @@
 import { useState, useMemo } from 'react';
-import { Search, Trash2, ArrowUpCircle, ArrowDownCircle, Filter, ChevronDown, ChevronRight } from 'lucide-react';
+import { Search, Trash2, ArrowDownCircle, Filter, ChevronDown, ChevronRight } from 'lucide-react';
 import { useExpenseStore } from '../store/useExpenseStore';
 import { CategoryDetailModal } from '../components/CategoryDetailModal';
 
 const Transactions = () => {
-  const { transactions, removeTransaction } = useExpenseStore();
+  const { transactions, removeTransaction, getCategoryBudget } = useExpenseStore();
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterType, setFilterType] = useState<'all' | 'expense' | 'income'>('all');
+  const [filterType, setFilterType] = useState<'all' | 'expense'>('all'); 
   const [expandedCategories, setExpandedCategories] = useState<string[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<{
     category: string;
     month: string;
-    type: 'expense' | 'income';
+    type: 'expense';
   } | null>(null);
 
   // Logic lọc dữ liệu
-  const filteredTransactions = transactions.filter((t) => {
-    const matchesSearch = 
-      t.note?.toLowerCase().includes(searchTerm.toLowerCase()) || 
-      t.category.toLowerCase().includes(searchTerm.toLowerCase());
-    
-    const matchesType = filterType === 'all' || t.type === filterType;
+  const filteredTransactions: Transaction[] = useMemo(() => {
+      return transactions.filter((t) => {
+        if (t.type === 'income') return false; 
+        
+        const matchesSearch = 
+          t.note?.toLowerCase().includes(searchTerm.toLowerCase()) || 
+          t.category.toLowerCase().includes(searchTerm.toLowerCase());
+        
+        const matchesType = filterType === 'all' || t.type === filterType;
 
-    return matchesSearch && matchesType;
-  });
+        return matchesSearch && matchesType;
+      });
+  }, [transactions, searchTerm, filterType]);
 
   // Nhóm giao dịch theo danh mục và tháng
   const groupedTransactions = useMemo(() => {
     const groups: Record<string, {
       category: string;
-      type: 'expense' | 'income';
+      type: 'expense';
       total: number;
-      month: string; // Format: "YYYY-MM"
-      monthDisplay: string; // Format: "Tháng MM/YYYY"
+      month: string; 
+      monthDisplay: string;
       transactions: typeof transactions;
     }> = {};
 
@@ -41,16 +45,15 @@ const Transactions = () => {
       const year = date.getFullYear();
       const month = date.getMonth() + 1;
       const monthKey = `${year}-${month.toString().padStart(2, '0')}`;
-      const monthDisplay = `Tháng ${month}/${year}`;
-      const groupKey = `${t.category}-${monthKey}-${t.type}`;
+      const groupKey = `${t.category}-${monthKey}`;
 
       if (!groups[groupKey]) {
         groups[groupKey] = {
           category: t.category,
-          type: t.type,
+          type: 'expense',
           total: 0,
           month: monthKey,
-          monthDisplay,
+          monthDisplay: `Tháng ${month}/${year}`,
           transactions: [],
         };
       }
@@ -59,11 +62,9 @@ const Transactions = () => {
       groups[groupKey].transactions.push(t);
     });
 
-    // Sắp xếp các nhóm theo tháng (mới nhất trước) và tổng tiền
     return Object.values(groups)
       .sort((a, b) => {
         if (a.month !== b.month) return b.month.localeCompare(a.month);
-        if (a.type !== b.type) return a.type === 'expense' ? -1 : 1;
         return b.total - a.total;
       });
   }, [filteredTransactions]);
@@ -79,26 +80,29 @@ const Transactions = () => {
 
   // Xử lý xóa giao dịch
   const handleDelete = (id: string, e: React.MouseEvent) => {
-    e.stopPropagation(); // Ngăn chặn toggle khi click xóa
-    if (window.confirm('Bạn có chắc muốn xóa giao dịch này không?')) {
-      removeTransaction(id);
+    e.stopPropagation(); 
+    
+    if (window.confirm('Bạn có chắc muốn xóa giao dịch này không?')) { 
+      removeTransaction(id); 
     }
   };
 
   // Hàm mở modal xem chi tiết
-  const handleViewDetails = (category: string, month: string, type: 'expense' | 'income', e: React.MouseEvent) => {
+  const handleViewDetails = (category: string, month: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    setSelectedCategory({ category, month, type });
+    setSelectedCategory({ category, month, type: 'expense' });
   };
+  
+  const getCategoryBudgetFromStore = (category: string) => getCategoryBudget(category);
+
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h2 className="text-2xl font-bold text-gray-800">Sổ thu chi</h2>
-          <p className="text-gray-500 text-sm">Quản lý chi tiết lịch sử giao dịch</p>
-        </div>
-      </div>
+      {/* Header mới: Đồng bộ hóa giao diện */}
+      <header className="mb-6 p-4 bg-white rounded-xl shadow-lg border border-gray-100">
+        <h2 className="text-2xl font-bold text-gray-800">Sổ Thu Chi</h2>
+        <p className="text-gray-500 text-sm mt-1">Quản lý chi tiết lịch sử giao dịch và phân tích theo nhóm.</p>
+      </header>
 
       {/* Thanh công cụ: Tìm kiếm & Filter */}
       <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex flex-col sm:flex-row gap-4">
@@ -114,19 +118,13 @@ const Transactions = () => {
           />
         </div>
 
-        {/* Bộ lọc Thu/Chi */}
+        {/* Bộ lọc Chi */}
         <div className="flex gap-2">
             <button
               onClick={() => setFilterType('all')}
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${filterType === 'all' ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
             >
               Tất cả
-            </button>
-            <button
-              onClick={() => setFilterType('income')}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-1 ${filterType === 'income' ? 'bg-green-600 text-white' : 'bg-green-50 text-green-700 hover:bg-green-100'}`}
-            >
-              Thu
             </button>
             <button
               onClick={() => setFilterType('expense')}
@@ -146,12 +144,11 @@ const Transactions = () => {
           </div>
         ) : (
           groupedTransactions.map((group) => {
-            const groupKey = `${group.category}-${group.month}-${group.type}`;
+            const groupKey = `${group.category}-${group.month}`;
             const isExpanded = expandedCategories.includes(groupKey);
             
             return (
               <div key={groupKey} className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-                {/* Header của nhóm */}
                 <div 
                   className={`p-4 border-b border-gray-100 cursor-pointer hover:bg-gray-50 transition-colors ${
                     isExpanded ? 'bg-gray-50' : ''
@@ -160,16 +157,8 @@ const Transactions = () => {
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                      <div className={`p-2 rounded-lg ${
-                        group.type === 'income' 
-                          ? 'bg-green-100 text-green-600' 
-                          : 'bg-red-100 text-red-600'
-                      }`}>
-                        {group.type === 'income' ? (
-                          <ArrowUpCircle size={20} />
-                        ) : (
-                          <ArrowDownCircle size={20} />
-                        )}
+                      <div className={`p-2 rounded-lg bg-red-100 text-red-600`}>
+                        <ArrowDownCircle size={20} />
                       </div>
                       <div>
                         <h3 className="font-bold text-gray-800">
@@ -185,13 +174,11 @@ const Transactions = () => {
                     </div>
                     
                     <div className="flex items-center gap-4">
-                      <span className={`text-lg font-bold ${
-                        group.type === 'expense' ? 'text-red-500' : 'text-green-500'
-                      }`}>
-                        {group.type === 'expense' ? '-' : '+'}{group.total.toLocaleString('vi-VN')} đ
+                      <span className={`text-lg font-bold text-red-500`}>
+                        -{group.total.toLocaleString('vi-VN')} đ
                       </span>
                       <button
-                        onClick={(e) => handleViewDetails(group.category, group.month, group.type, e)}
+                        onClick={(e) => handleViewDetails(group.category, group.month, e)}
                         className="px-3 py-1.5 text-sm bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg font-medium transition-colors"
                       >
                         Xem chi tiết
@@ -226,8 +213,8 @@ const Transactions = () => {
                             <div className="text-gray-800">{t.note || <span className="text-gray-400">Không có ghi chú</span>}</div>
                           </div>
                           <div className="col-span-3 text-right">
-                            <span className={`text-sm font-bold ${t.type === 'expense' ? 'text-red-500' : 'text-green-500'}`}>
-                              {t.type === 'expense' ? '-' : '+'}{t.amount.toLocaleString('vi-VN')} đ
+                            <span className={`text-sm font-bold text-red-500`}>
+                              -{t.amount.toLocaleString('vi-VN')} đ
                             </span>
                           </div>
                           <div className="col-span-2 text-center">
@@ -248,17 +235,14 @@ const Transactions = () => {
                         <div className="text-sm text-blue-700">
                           Tổng cộng cho "{group.category}" trong {group.monthDisplay}:
                         </div>
-                        <div className={`text-lg font-bold ${
-                          group.type === 'expense' ? 'text-red-600' : 'text-green-600'
-                        }`}>
-                          {group.type === 'expense' ? '-' : '+'}{group.total.toLocaleString('vi-VN')} đ
+                        <div className={`text-lg font-bold text-red-600`}>
+                          -{group.total.toLocaleString('vi-VN')} đ
                         </div>
                       </div>
                       
-                      {/* Hiển thị định mức nếu có (chỉ cho chi tiêu) */}
-                      {group.type === 'expense' && (() => {
-                        const getCategoryBudget = useExpenseStore.getState().getCategoryBudget;
-                        const categoryBudget = getCategoryBudget(group.category);
+                      {/* Hiển thị định mức */}
+                      {(() => {
+                        const categoryBudget = getCategoryBudgetFromStore(group.category);
                         
                         if (categoryBudget > 0) {
                           const percentage = (group.total / categoryBudget) * 100;
@@ -306,7 +290,6 @@ const Transactions = () => {
           onClose={() => setSelectedCategory(null)}
           category={selectedCategory.category}
           month={selectedCategory.month}
-          type={selectedCategory.type}
         />
       )}
     </div>

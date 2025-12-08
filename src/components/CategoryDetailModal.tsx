@@ -7,16 +7,16 @@ interface CategoryDetailModalProps {
   onClose: () => void;
   category: string;
   month: string; // Format: "YYYY-MM"
-  type: 'expense' | 'income';
+  // type: 'expense' | 'income'; // ĐÃ LOẠI BỎ
 }
 
+// Bỏ 'type' khỏi props
 export const CategoryDetailModal = ({ 
   isOpen, 
   onClose, 
   category, 
   month, 
-  type 
-}: CategoryDetailModalProps) => {
+}: Omit<CategoryDetailModalProps, 'type'>) => {
   const { transactions, getCategoryBudget } = useExpenseStore();
 
   if (!isOpen) return null;
@@ -27,7 +27,7 @@ export const CategoryDetailModal = ({
     const date = new Date(t.date);
     return (
       t.category === category &&
-      t.type === type &&
+      t.type === 'expense' && // CỐ ĐỊNH LÀ 'expense'
       date.getFullYear() === year &&
       date.getMonth() + 1 === monthNum
     );
@@ -36,8 +36,8 @@ export const CategoryDetailModal = ({
   // Tính tổng
   const totalAmount = filteredTransactions.reduce((sum, t) => sum + t.amount, 0);
   
-  // Lấy định mức (nếu là chi tiêu)
-  const categoryBudget = type === 'expense' ? getCategoryBudget(category) : 0;
+  // Lấy định mức
+  const categoryBudget = getCategoryBudget(category);
   const percentage = categoryBudget > 0 ? (totalAmount / categoryBudget) * 100 : 0;
 
   return (
@@ -47,7 +47,7 @@ export const CategoryDetailModal = ({
         <div className="px-6 py-4 border-b flex justify-between items-center bg-gray-50">
           <div>
             <h3 className="text-xl font-bold text-gray-800">
-              Chi tiết {type === 'expense' ? 'chi tiêu' : 'thu nhập'}
+              Chi tiết chi tiêu
             </h3>
             <p className="text-gray-600">
               {category} - Tháng {monthNum}/{year}
@@ -71,16 +71,17 @@ export const CategoryDetailModal = ({
               </div>
             </div>
             
-            <div className={`p-4 rounded-lg ${type === 'expense' ? 'bg-red-50' : 'bg-green-50'}`}>
-              <div className={`text-sm ${type === 'expense' ? 'text-red-600' : 'text-green-600'} mb-1`}>
-                Tổng {type === 'expense' ? 'chi tiêu' : 'thu nhập'}
+            <div className={`p-4 rounded-lg bg-red-50`}>
+              <div className={`text-sm text-red-600 mb-1`}>
+                Tổng chi tiêu
               </div>
-              <div className={`text-2xl font-bold ${type === 'expense' ? 'text-red-800' : 'text-green-800'}`}>
+              <div className={`text-2xl font-bold text-red-800`}>
                 {totalAmount.toLocaleString()}đ
               </div>
             </div>
 
-            {type === 'expense' && categoryBudget > 0 && (
+            {/* Chỉ hiện thị Định mức nếu có */}
+            {categoryBudget > 0 && (
               <>
                 <div className="bg-yellow-50 p-4 rounded-lg">
                   <div className="text-sm text-yellow-600 mb-1">Định mức</div>
@@ -149,9 +150,9 @@ export const CategoryDetailModal = ({
                   
                   <div className="col-span-3 text-right">
                     <div className="flex items-center justify-end gap-2">
-                      <DollarSign size={16} className={`${t.type === 'expense' ? 'text-red-400' : 'text-green-400'}`} />
-                      <span className={`font-bold ${t.type === 'expense' ? 'text-red-500' : 'text-green-500'}`}>
-                        {t.type === 'expense' ? '-' : '+'}{t.amount.toLocaleString()}đ
+                      <DollarSign size={16} className={`text-red-400`} />
+                      <span className={`font-bold text-red-500`}>
+                        -{t.amount.toLocaleString()}đ
                       </span>
                     </div>
                   </div>

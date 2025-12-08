@@ -1,63 +1,89 @@
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell } from 'recharts';
 import { useExpenseStore } from '../store/useExpenseStore';
+import { PieChart, LineChart } from 'lucide-react';
+import { useMemo } from 'react';
 
 const Reports = () => {
-    const { transactions, budgetLimit, categoryBudgets } = useExpenseStore();
+    const { transactions, getTotalCategoryLimit, categoryBudgets } = useExpenseStore();
+    const totalLimit = getTotalCategoryLimit();
 
-    // Logic xử lý dữ liệu: Tạo mảng 12 tháng
-    const monthlyData = Array.from({ length: 12 }, (_, i) => {
-        const monthIndex = i;
+    const monthlyData = useMemo(() => {
+        const data = Array.from({ length: 12 }, (_, i) => {
+            const monthIndex = i;
 
-        // Lọc các giao dịch trong tháng i
-        const totalSpentInMonth = transactions
-            .filter(t => {
-                const date = new Date(t.date);
-                return date.getMonth() === monthIndex && t.type === 'expense';
-            })
-            .reduce((sum, t) => sum + t.amount, 0);
+            const totalSpentInMonth = transactions
+                .filter(t => {
+                    const date = new Date(t.date);
+                    return date.getMonth() === monthIndex && t.type === 'expense';
+                })
+                .reduce((sum, t) => sum + t.amount, 0);
 
-        return {
-            name: `T${i + 1}`,
-            "Đã chi": totalSpentInMonth,
-            "Định mức": budgetLimit,
-            "Vượt mức": Math.max(0, totalSpentInMonth - budgetLimit)
-        };
-    });
+            return {
+                name: `T${i + 1}`,
+                "Đã chi": totalSpentInMonth,
+                "Định mức": totalLimit,
+                "Vượt mức": Math.max(0, totalSpentInMonth - totalLimit)
+            };
+        });
 
-    // Tính dữ liệu cho biểu đồ định mức danh mục
-    const now = new Date();
-    const currentMonth = now.getMonth();
-    const currentYear = now.getFullYear();
+        // Chỉ giữ lại các tháng đã có chi tiêu
+        return data.filter(d => d["Đã chi"] > 0);
+    }, [transactions, totalLimit]);
 
-    const categoryBudgetData = categoryBudgets.map(budget => {
-        const spent = transactions
-            .filter(t => {
-                const date = new Date(t.date);
-                return (
-                    t.type === 'expense' &&
-                    t.category === budget.category &&
-                    date.getMonth() === currentMonth &&
-                    date.getFullYear() === currentYear
-                );
-            })
-            .reduce((sum, t) => sum + t.amount, 0);
-        
-        const percentage = budget.limit > 0 ? (spent / budget.limit) * 100 : 0;
-        
-        return {
-            name: budget.category,
-            "Định mức": budget.limit,
-            "Đã chi": spent,
-            "Phần trăm": percentage
-        };
-    });
 
-    // Màu sắc cho biểu đồ
+    // Tính toán số liệu tổng quan
+    const totalMonthsWithExpense = monthlyData.length;
+    const totalSpentAcrossMonths = monthlyData.reduce((sum, d) => sum + d["Đã chi"], 0);
+    const averageMonthlySpent = totalMonthsWithExpense > 0 ? totalSpentAcrossMonths / totalMonthsWithExpense : 0;
+    
+    // Tính tổng định mức các danh mục (dùng cho biểu đồ danh mục)
+    const categoryBudgetData = useMemo(() => {
+        const now = new Date();
+        const currentMonth = now.getMonth();
+        const currentYear = now.getFullYear();
+
+        return categoryBudgets.map(budget => {
+            const spent = transactions
+                .filter(t => {
+                    const date = new Date(t.date);
+                    return (
+                        t.type === 'expense' &&
+                        t.category === budget.category &&
+                        date.getMonth() === currentMonth &&
+                        date.getFullYear() === currentYear
+                    );
+                })
+                .reduce((sum, t) => sum + t.amount, 0);
+            
+            const percentage = budget.limit > 0 ? (spent / budget.limit) * 100 : 0;
+            
+            return {
+                name: budget.category,
+                "Định mức": budget.limit,
+                "Đã chi": spent,
+                "Phần trăm": percentage
+            };
+        }).filter(d => d["Đã chi"] > 0);
+    }, [transactions, categoryBudgets]);
+
+
+    // Màu sắc cho biểu đồ (giữ nguyên)
     const getBarColor = (percentage: number) => {
         if (percentage > 100) return '#ef4444'; // Đỏ
         if (percentage > 80) return '#f59e0b'; // Vàng
         return '#10b981'; // Xanh
     };
+    
+    // Nếu chưa có định mức tổng, hiển thị thông báo (giữ nguyên)
+    if (totalLimit === 0) {
+        return (
+            <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 h-[300px] flex flex-col items-center justify-center text-gray-500">
+                <h2 className="text-xl font-bold mb-3">Chưa có dữ liệu báo cáo</h2>
+                <p>Vui lòng vào mục <span className="font-semibold text-blue-600">Cấu hình</span> để thiết lập Định mức Danh mục.</p>
+            </div>
+        );
+    }
+
 
     return (
         <div className="space-y-6">
@@ -68,9 +94,39 @@ const Reports = () => {
                 </div>
             </div>
 
+            {/* TỔNG QUAN HIỆU SUẤT */}
+            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                <h3 className="text-lg font-bold text-gray-700 mb-4">
+                    Tổng quan Hiệu suất Ngân sách
+                </h3>
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div className="p-3 bg-blue-50 rounded-lg">
+                        <div className="text-sm text-blue-600">Tổng tháng có chi tiêu</div>
+                        <div className="text-2xl font-bold text-blue-800">{totalMonthsWithExpense}</div>
+                    </div>
+                    <div className="p-3 bg-green-50 rounded-lg">
+                        <div className="text-sm text-green-600">Chi tiêu TB hàng tháng</div>
+                        <div className="text-xl font-bold text-green-800">{averageMonthlySpent.toLocaleString('vi-VN', { maximumFractionDigits: 0 })}đ</div>
+                    </div>
+                    <div className="p-3 bg-yellow-50 rounded-lg">
+                        <div className="text-sm text-yellow-600">Ngân sách Tổng</div>
+                        <div className="text-xl font-bold text-yellow-800">{totalLimit.toLocaleString('vi-VN')}đ</div>
+                    </div>
+                    <div className="p-3 bg-red-50 rounded-lg">
+                        <div className="text-sm text-red-600">Tháng gần nhất (T{new Date().getMonth() + 1})</div>
+                        <div className="text-xl font-bold text-red-800">
+                           {monthlyData[monthlyData.length - 1]?.["Đã chi"].toLocaleString('vi-VN') || 0}đ
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+
             {/* Biểu đồ cột tổng quan */}
             <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 h-[500px]">
-                <h3 className="text-lg font-bold text-gray-700 mb-6">So sánh Chi tiêu thực tế vs Định mức</h3>
+                <h3 className="text-lg font-bold text-gray-700 mb-6 flex items-center gap-2">
+                    <LineChart size={20} className="text-gray-400"/> Xu hướng Chi tiêu vs Định mức Tổng ({totalLimit.toLocaleString()} đ)
+                </h3>
 
                 <ResponsiveContainer width="100%" height="85%">
                     <BarChart
@@ -95,7 +151,7 @@ const Reports = () => {
             {categoryBudgets.length > 0 && (
                 <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
                     <h3 className="text-lg font-bold text-gray-700 mb-6">
-                        Định mức theo danh mục (Tháng {currentMonth + 1}/{currentYear})
+                        Định mức theo danh mục (Tháng {new Date().getMonth() + 1}/{new Date().getFullYear()})
                     </h3>
                     
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -105,17 +161,18 @@ const Reports = () => {
                                 <BarChart
                                     data={categoryBudgetData}
                                     margin={{ top: 20, right: 30, left: 0, bottom: 5 }}
+                                    layout="vertical"
                                 >
                                     <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                                     <XAxis 
-                                        dataKey="name" 
-                                        angle={-45}
-                                        textAnchor="end"
-                                        height={60}
-                                        tick={{ fontSize: 12 }}
+                                        type="number"
+                                        tickFormatter={(value) => `${value / 1000}k`}
                                     />
                                     <YAxis 
-                                        tickFormatter={(value) => `${value / 1000}k`}
+                                        type="category"
+                                        dataKey="name" 
+                                        width={100}
+                                        tick={{ fontSize: 12 }}
                                     />
                                     <Tooltip
                                         formatter={(value: number, name: string) => [

@@ -14,7 +14,7 @@ interface ExpenseState {
   budgetLimit: number;
   categoryBudgets: CategoryBudget[];
   notifications: Notification[];
-  lastTransactionDate: string; // THÊM STATE: Lưu ngày cuối cùng nhập
+  lastTransactionDate: string; 
   
   addTransaction: (transaction: Omit<Transaction, 'id'>) => void;
   removeTransaction: (id: string) => void;
@@ -26,6 +26,11 @@ interface ExpenseState {
   addCategoryBudget: (category: string, limit: number) => void;
   updateCategoryBudget: (category: string, limit: number) => void;
   removeCategoryBudget: (category: string) => void;
+  
+  // SELECTOR MỚI
+  getTotalMonthlyExpenses: (month: number, year: number) => number; 
+  getAvailableReportPeriods: () => Array<{month: number, year: number}>;
+
   getCategoryBudget: (category: string) => number;
   getTotalCategoryExpenses: (category: string, month?: number, year?: number) => number;
   getCategoryExpensePercentage: (category: string) => number;
@@ -43,9 +48,9 @@ export const useExpenseStore = create<ExpenseState>()(
       budgetLimit: 5000000, 
       categoryBudgets: [],
       notifications: [],
-      lastTransactionDate: new Date().toISOString().split('T')[0], // KHỞI TẠO STATE MỚI
+      lastTransactionDate: new Date().toISOString().split('T')[0],
 
-      // --- ACTIONS CHO NOTIFICATION ---
+      // --- ACTIONS ---
       addNotification: (message, type) => {
           const newNotification: Notification = { id: uuidv4(), message, type };
           set((state) => ({
@@ -61,13 +66,12 @@ export const useExpenseStore = create<ExpenseState>()(
           notifications: state.notifications.filter((n) => n.id !== id),
         })),
 
-      // --- ACTIONS GIAO DỊCH ---
       addTransaction: (newTransaction) => {
         const transactionWithId = { ...newTransaction, id: uuidv4(), type: 'expense' as const };
         
         set((state) => ({
           transactions: [transactionWithId, ...state.transactions],
-          lastTransactionDate: newTransaction.date, // LƯU NGÀY GIAO DỊCH CUỐI CÙNG
+          lastTransactionDate: newTransaction.date,
         }));
 
         const totalLimit = get().getTotalCategoryLimit();
@@ -77,20 +81,11 @@ export const useExpenseStore = create<ExpenseState>()(
         const currentMonth = now.getMonth();
         const currentYear = now.getFullYear();
         
-        const currentMonthSpent = get().transactions
-          .filter(t => {
-            const tDate = new Date(t.date);
-            return (
-              t.type === 'expense' &&
-              tDate.getMonth() === currentMonth &&
-              tDate.getFullYear() === currentYear
-            );
-          })
-          .reduce((sum, t) => sum + t.amount, newTransaction.amount);
+        const currentMonthSpent = get().getTotalMonthlyExpenses(currentMonth, currentYear);
 
-        if (currentMonthSpent > totalLimit && totalLimit > 0) {
+        if (currentMonthSpent + newTransaction.amount > totalLimit && totalLimit > 0) {
           get().addNotification(
-              `Bạn đã chi tiêu ${currentMonthSpent.toLocaleString()}đ, vượt quá TỔNG định mức tháng này!`,
+              `Bạn đã chi tiêu ${(currentMonthSpent + newTransaction.amount).toLocaleString()}đ, vượt quá TỔNG định mức tháng này!`,
               'error'
           );
         }
@@ -99,9 +94,9 @@ export const useExpenseStore = create<ExpenseState>()(
         if (categoryBudget) {
           const categorySpentAfterAdd = get().getTotalCategoryExpenses(newTransaction.category, currentMonth, currentYear);
           
-          if (categorySpentAfterAdd > categoryBudget.limit) {
+          if (categorySpentAfterAdd + newTransaction.amount > categoryBudget.limit) {
             get().addNotification(
-              `Đã vượt định mức cho danh mục "${newTransaction.category}"! (${categorySpentAfterAdd.toLocaleString()}đ / ${categoryBudget.limit.toLocaleString()}đ)`,
+              `Đã vượt định mức cho danh mục "${newTransaction.category}"! (${(categorySpentAfterAdd + newTransaction.amount).toLocaleString()}đ / ${categoryBudget.limit.toLocaleString()}đ)`,
               'warning'
             );
           }
@@ -124,8 +119,6 @@ export const useExpenseStore = create<ExpenseState>()(
         }
       },
       
-      // ... (actions định mức danh mục giữ nguyên) ...
-
       setCategoryBudgets: (budgets) => {
         set({ categoryBudgets: budgets });
       },
@@ -157,23 +150,26 @@ export const useExpenseStore = create<ExpenseState>()(
           return get().categoryBudgets.reduce((sum, cb) => sum + cb.limit, 0);
       },
       
-      getTotalExpenses: () => {
-        const now = new Date();
-        const currentMonth = now.getMonth();
-        const currentYear = now.getFullYear();
-
+      // HÀM MỚI: Lấy tổng chi tiêu của một tháng/năm cụ thể
+      getTotalMonthlyExpenses: (month: number, year: number) => {
         return get().transactions
           .filter(t => {
             const tDate = new Date(t.date);
             return (
               t.type === 'expense' &&
-              tDate.getMonth() === currentMonth &&
-              tDate.getFullYear() === currentYear
+              tDate.getMonth() === month &&
+              tDate.getFullYear() === year
             );
           })
           .reduce((sum, item) => sum + item.amount, 0);
       },
-
+      
+      // Cập nhật hàm getTotalExpenses để gọi hàm mới (lấy chi tiêu tháng hiện tại)
+      getTotalExpenses: () => {
+        const now = new Date();
+        return get().getTotalMonthlyExpenses(now.getMonth(), now.getFullYear());
+      },
+      
       getCategoryBudget: (category) => {
         const { categoryBudgets } = get();
         const budget = categoryBudgets.find(cb => cb.category === category);
@@ -238,6 +234,34 @@ export const useExpenseStore = create<ExpenseState>()(
           const uniqueCategories = Array.from(new Set(allCategories));
 
           return uniqueCategories.sort((a, b) => a.localeCompare(b, 'vi', { sensitivity: 'base' }));
+      },
+      
+      // SELECTOR MỚI: Lấy danh sách các tháng/năm có dữ liệu
+      getAvailableReportPeriods: () => {
+          const periods = get().transactions
+              .filter(t => t.type === 'expense')
+              .map(t => {
+                  const date = new Date(t.date);
+                  return {
+                      month: date.getMonth(),
+                      year: date.getFullYear()
+                  };
+              });
+
+          const uniquePeriods = periods.reduce((acc, current) => {
+              const key = `${current.year}-${current.month}`;
+              if (!acc.find(p => p.key === key)) {
+                  acc.push({ key, month: current.month, year: current.year });
+              }
+              return acc;
+          }, [] as Array<{key: string, month: number, year: number,}>);
+
+          return uniquePeriods
+              .sort((a, b) => {
+                  if (b.year !== a.year) return b.year - a.year;
+                  return b.month - a.month;
+              })
+              .map(p => ({ month: p.month, year: p.year }));
       },
     }),
     {

@@ -1,7 +1,8 @@
 import { useState, useMemo } from 'react';
-import { Search, Trash2, ArrowDownCircle, Filter, ChevronDown, ChevronRight } from 'lucide-react';
+import { Search, Trash2, ArrowDownCircle, Filter, ChevronDown, ChevronRight, Calendar } from 'lucide-react'; // THÊM ICON CALENDAR
 import { useExpenseStore } from '../store/useExpenseStore';
 import { CategoryDetailModal } from '../components/CategoryDetailModal';
+import type { Transaction } from '../types/types';
 
 const Transactions = () => {
   const { transactions, removeTransaction, getCategoryBudget } = useExpenseStore();
@@ -14,23 +15,48 @@ const Transactions = () => {
     type: 'expense';
   } | null>(null);
 
+  // === STATE MỚI CHO BỘ LỌC NGÀY ===
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+
+  // Hàm chuẩn hóa ngày để so sánh
+  const normalizeDate = (dateString: string) => {
+    if (!dateString) return null;
+    return new Date(dateString).getTime();
+  };
+
   // Logic lọc dữ liệu
   const filteredTransactions: Transaction[] = useMemo(() => {
-      return transactions.filter((t) => {
-        if (t.type === 'income') return false; 
-        
-        const matchesSearch = 
-          t.note?.toLowerCase().includes(searchTerm.toLowerCase()) || 
-          t.category.toLowerCase().includes(searchTerm.toLowerCase());
-        
-        const matchesType = filterType === 'all' || t.type === filterType;
+      const startTimestamp = normalizeDate(startDate);
+      const endTimestamp = normalizeDate(endDate);
 
-        return matchesSearch && matchesType;
-      });
-  }, [transactions, searchTerm, filterType]);
+      return transactions
+        .filter((t) => {
+            // 1. Loại bỏ Thu nhập
+            if (t.type === 'income') return false; 
+            
+            const transactionTimestamp = normalizeDate(t.date);
 
-  // Nhóm giao dịch theo danh mục và tháng
+            // 2. Lọc theo Ngày (Date Range)
+            const matchesDateRange = 
+                (!startTimestamp || transactionTimestamp >= startTimestamp) &&
+                (!endTimestamp || transactionTimestamp <= endTimestamp + 86400000); // Thêm 1 ngày để bao gồm ngày kết thúc
+
+            // 3. Lọc theo Từ khóa
+            const matchesSearch = 
+              t.note?.toLowerCase().includes(searchTerm.toLowerCase()) || 
+              t.category.toLowerCase().includes(searchTerm.toLowerCase());
+            
+            // 4. Lọc theo Loại (Expense - luôn là true vì đã lọc ở bước 1)
+            const matchesType = filterType === 'all' || t.type === filterType;
+
+            return matchesDateRange && matchesSearch && matchesType;
+        });
+  }, [transactions, searchTerm, filterType, startDate, endDate]);
+
+  // Nhóm giao dịch theo danh mục và tháng (Logic giữ nguyên)
   const groupedTransactions = useMemo(() => {
+    // ... (logic nhóm giao dịch giữ nguyên) ...
     const groups: Record<string, {
       category: string;
       type: 'expense';
@@ -98,15 +124,16 @@ const Transactions = () => {
 
   return (
     <div className="space-y-6">
-      {/* Header mới: Đồng bộ hóa giao diện */}
+      {/* Header */}
       <header className="mb-6 p-4 bg-white rounded-xl shadow-lg border border-gray-100">
         <h2 className="text-2xl font-bold text-gray-800">Sổ Thu Chi</h2>
         <p className="text-gray-500 text-sm mt-1">Quản lý chi tiết lịch sử giao dịch và phân tích theo nhóm.</p>
       </header>
 
-      {/* Thanh công cụ: Tìm kiếm & Filter */}
-      <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex flex-col sm:flex-row gap-4">
-        {/* Ô tìm kiếm */}
+      {/* Thanh công cụ: Tìm kiếm, Filter, và Date Range */}
+      <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex flex-col gap-4">
+        
+        {/* HÀNG 1: TÌM KIẾM */}
         <div className="flex-1 relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
           <input
@@ -118,20 +145,48 @@ const Transactions = () => {
           />
         </div>
 
-        {/* Bộ lọc Chi */}
-        <div className="flex gap-2">
-            <button
-              onClick={() => setFilterType('all')}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${filterType === 'all' ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
-            >
-              Tất cả
-            </button>
-            <button
-              onClick={() => setFilterType('expense')}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-1 ${filterType === 'expense' ? 'bg-red-600 text-white' : 'bg-red-50 text-red-700 hover:bg-red-100'}`}
-            >
-               Chi
-            </button>
+        {/* HÀNG 2: BỘ LỌC NGÀY & LOẠI */}
+        <div className="flex flex-col md:flex-row items-center gap-3">
+            
+            {/* Bộ chọn ngày bắt đầu */}
+            <div className="relative flex-1 w-full md:w-auto">
+                <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                <input
+                    type="date"
+                    value={startDate}
+                    onChange={(e) => setStartDate(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2 rounded-lg border border-gray-200 focus:border-blue-500 outline-none text-gray-700 cursor-pointer"
+                />
+            </div>
+
+            <span className="text-gray-500 hidden md:block">—</span>
+
+            {/* Bộ chọn ngày kết thúc */}
+            <div className="relative flex-1 w-full md:w-auto">
+                <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                <input
+                    type="date"
+                    value={endDate}
+                    onChange={(e) => setEndDate(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2 rounded-lg border border-gray-200 focus:border-blue-500 outline-none text-gray-700 cursor-pointer"
+                />
+            </div>
+            
+            {/* Bộ lọc Chi (giữ nguyên) */}
+            <div className="flex gap-2 w-full md:w-auto mt-2 md:mt-0">
+                <button
+                  onClick={() => setFilterType('all')}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${filterType === 'all' ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                >
+                  Tất cả
+                </button>
+                <button
+                  onClick={() => setFilterType('expense')}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-1 ${filterType === 'expense' ? 'bg-red-600 text-white' : 'bg-red-50 text-red-700 hover:bg-red-100'}`}
+                >
+                   Chi
+                </button>
+            </div>
         </div>
       </div>
 
@@ -140,7 +195,7 @@ const Transactions = () => {
         {groupedTransactions.length === 0 ? (
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-12 text-center text-gray-400">
             <Filter className="mx-auto mb-3 opacity-20" size={48} />
-            <p>Không tìm thấy giao dịch nào phù hợp.</p>
+            <p>Không tìm thấy giao dịch nào phù hợp với điều kiện lọc.</p>
           </div>
         ) : (
           groupedTransactions.map((group) => {

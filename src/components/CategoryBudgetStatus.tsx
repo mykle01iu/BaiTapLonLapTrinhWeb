@@ -1,5 +1,5 @@
 import { useExpenseStore } from '../store/useExpenseStore';
-import { DollarSign, AlertTriangle, CheckCircle, TrendingUp, TrendingDown } from 'lucide-react';
+import { DollarSign, AlertTriangle, CheckCircle, TrendingUp  } from 'lucide-react';
 
 export const CategoryBudgetStatus = () => {
     const { categoryBudgets, getTotalCategoryExpenses } = useExpenseStore();

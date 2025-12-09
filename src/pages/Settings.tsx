@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Save, Trash2, AlertTriangle, Plus, Edit2, X, DollarSign, CreditCard } from 'lucide-react';
+import { Save, Trash2, AlertTriangle, Plus, Edit2, X, CreditCard } from 'lucide-react';
 import { useExpenseStore } from '../store/useExpenseStore';
 import type { CategoryBudget } from '../types/types';
 

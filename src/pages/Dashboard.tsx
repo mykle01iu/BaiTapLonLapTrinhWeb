@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo } from 'react'; // ĐÃ XÓA import React (vì TSConfig đã là react-jsx)
 import { Plus } from 'lucide-react';
 import { useExpenseStore } from '../store/useExpenseStore';
 import { AddTransactionModal } from '../components/AddTransactionModal';
@@ -15,8 +15,9 @@ const Dashboard = () => {
         getTotalCategoryExpenses 
     } = useExpenseStore();
 
-    // Dùng useMemo để tính toán warning map
+    // Khai báo warnings
     const transactionWarnings = useMemo(() => {
+        // Lỗi JSX đã được khắc phục khi sử dụng cấu hình "react-jsx"
         const warnings: Record<string, JSX.Element | null> = {};
         const now = new Date();
         const currentMonth = now.getMonth();
@@ -71,7 +72,7 @@ const Dashboard = () => {
             {/* 2. GRID LAYOUT: Chia màn hình làm 3 cột */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
-                {/* CỘT PHẢI (Chiếm 1 phần): Ngân sách & Biểu đồ -> Đặt lên đầu */}
+                {/* CỘT PHẢI (Chiếm 1 phần): Ngân sách & Biểu đồ */}
                 <div className="space-y-6 flex flex-col lg:col-span-1">
                     <BudgetCard /> 
                     <ExpenseChart /> 

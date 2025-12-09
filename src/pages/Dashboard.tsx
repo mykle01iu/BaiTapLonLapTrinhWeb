@@ -1,5 +1,5 @@
-import { useState, useMemo } from 'react'; // ĐÃ XÓA import React (vì TSConfig đã là react-jsx)
-import { Plus } from 'lucide-react';
+import React, { useState, useMemo } from 'react';
+import { Plus, Trash2 } from 'lucide-react'; 
 import { useExpenseStore } from '../store/useExpenseStore';
 import { AddTransactionModal } from '../components/AddTransactionModal';
 import { BudgetCard } from '../components/BudgetCard';
@@ -12,12 +12,12 @@ const Dashboard = () => {
     const { 
         transactions, 
         getCategoryBudget, 
-        getTotalCategoryExpenses 
+        getTotalCategoryExpenses,
+        removeTransaction // LẤY HÀM XÓA
     } = useExpenseStore();
 
-    // Khai báo warnings
+    // Dùng useMemo để tính toán warning map
     const transactionWarnings = useMemo(() => {
-        // Lỗi JSX đã được khắc phục khi sử dụng cấu hình "react-jsx"
         const warnings: Record<string, JSX.Element | null> = {};
         const now = new Date();
         const currentMonth = now.getMonth();
@@ -49,6 +49,15 @@ const Dashboard = () => {
 
         return warnings;
     }, [transactions, getCategoryBudget, getTotalCategoryExpenses]);
+
+
+    // HÀM XỬ LÝ XÓA GIAO DỊCH NGAY TRÊN DASHBOARD
+    const handleDelete = (id: string, e: React.MouseEvent) => {
+        e.stopPropagation(); 
+        if (window.confirm('Bạn có chắc muốn xóa giao dịch này không?')) { 
+            removeTransaction(id); 
+        }
+    };
 
 
     return (
@@ -96,16 +105,17 @@ const Dashboard = () => {
                                     <tr>
                                         <th className="px-6 py-4">Ngày</th>
                                         <th className="px-6 py-4">Danh mục</th>
-                                        <th className="px-6 py-4">Ghi chú</th>
+                                        <th className="px-6 py-4" title="Di chuột để xem đầy đủ ghi chú">Ghi chú</th> 
                                         <th className="px-6 py-4 text-right">Số tiền</th>
+                                        <th className="px-6 py-4 text-center">Xóa</th> 
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-100">
                                     {transactions.length === 0 ? (
                                         <tr>
-                                            <td colSpan={4} className="px-6 py-12 text-center text-gray-400">
+                                            <td colSpan={5} className="px-6 py-12 text-center text-gray-400">
                                                 <div className="flex flex-col items-center gap-2">
-                                                    <span>📭 Chưa có giao dịch nào</span>
+                                                    <span> Chưa có giao dịch nào</span>
                                                     <span className="text-xs">Hãy bấm nút "Thêm khoản chi" ở trên</span>
                                                 </div>
                                             </td>
@@ -127,6 +137,15 @@ const Dashboard = () => {
                                                 </td>
                                                 <td className={`px-6 py-4 text-sm font-bold text-right whitespace-nowrap ${t.type === 'expense' ? 'text-red-500' : 'text-green-500'}`}>
                                                     {t.type === 'expense' ? '-' : '+'}{t.amount.toLocaleString('vi-VN')} đ
+                                                </td>
+                                                <td className="px-6 py-4 text-center">
+                                                    <button 
+                                                        onClick={(e) => handleDelete(t.id, e)}
+                                                        className="text-gray-400 hover:text-red-600 hover:bg-red-50 p-1.5 rounded-lg transition-colors"
+                                                        title="Xóa giao dịch này"
+                                                    >
+                                                        <Trash2 size={16} />
+                                                    </button>
                                                 </td>
                                             </tr>
                                         ))

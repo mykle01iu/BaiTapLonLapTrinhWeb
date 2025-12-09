@@ -1,8 +1,7 @@
 import { useExpenseStore } from '../store/useExpenseStore';
 
 export const BudgetCard = () => {
-  const { 
-    transactions, 
+  const {  
     // THAY THẾ: Gọi hàm tính tổng định mức danh mục
     getTotalCategoryLimit, 
     categoryBudgets, 

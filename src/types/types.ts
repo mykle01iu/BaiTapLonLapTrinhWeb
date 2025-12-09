@@ -1,3 +1,15 @@
+export interface UserInfo {
+    _id: string;
+    username: string;
+}
+
+export interface AuthState {
+    token: string | null;
+    user: UserInfo | null;
+    isAuthenticated: boolean;
+    // ... (Các trạng thái khác nếu cần)
+}
+
 // Định nghĩa 1 Khoản chi tiêu
 export interface Transaction {
   id: string;

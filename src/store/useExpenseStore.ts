@@ -1,56 +1,85 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { v4 as uuidv4 } from 'uuid';
-import type { Transaction, CategoryBudget } from '../types/types';
+import type { Transaction, CategoryBudget, AuthState, UserInfo } from '../types/types'; 
 
 interface Notification {
-  id: string;
-  message: string;
-  type: 'warning' | 'error' | 'success';
+    id: string;
+    message: string;
+    type: 'warning' | 'error' | 'success';
 }
 
 interface ExpenseState {
-  transactions: Transaction[];
-  budgetLimit: number;
-  categoryBudgets: CategoryBudget[];
-  notifications: Notification[];
-  lastTransactionDate: string; 
-  
-  addTransaction: (transaction: Omit<Transaction, 'id'>) => void;
-  removeTransaction: (id: string) => void;
-  
-  getTotalExpenses: () => number;
-  getTotalCategoryLimit: () => number; 
-  
-  setCategoryBudgets: (budgets: CategoryBudget[]) => void;
-  addCategoryBudget: (category: string, limit: number) => void;
-  updateCategoryBudget: (category: string, limit: number) => void;
-  removeCategoryBudget: (category: string) => void;
-  
-  // SELECTOR MỚI
-  getTotalMonthlyExpenses: (month: number, year: number) => number; 
-  getAvailableReportPeriods: () => Array<{month: number, year: number}>;
+    token: string | null;
+    user: UserInfo | null;
+    isAuthenticated: boolean;
+    
+    transactions: Transaction[];
+    categoryBudgets: CategoryBudget[];
+    
+    notifications: Notification[];
+    lastTransactionDate: string; 
 
-  getCategoryBudget: (category: string) => number;
-  getTotalCategoryExpenses: (category: string, month?: number, year?: number) => number;
-  getCategoryExpensePercentage: (category: string) => number;
-  getOverBudgetCategories: () => Array<{category: string, spent: number, limit: number}>;
-  getAllUniqueCategories: () => string[];
+    login: (token: string, user: UserInfo) => void;
+    logout: () => void;
 
-  addNotification: (message: string, type: 'warning' | 'error' | 'success') => void;
-  removeNotification: (id: string) => void;
+    addTransaction: (transaction: Omit<Transaction, 'id'>) => void;
+    removeTransaction: (id: string) => void;
+    
+    getTotalExpenses: () => number;
+    getTotalCategoryLimit: () => number; 
+    
+    setCategoryBudgets: (budgets: CategoryBudget[]) => void;
+    addCategoryBudget: (category: string, limit: number) => void;
+    updateCategoryBudget: (category: string, limit: number) => void;
+    removeCategoryBudget: (category: string) => void;
+    
+    getTotalMonthlyExpenses: (month: number, year: number) => number; 
+    getAvailableReportPeriods: () => Array<{month: number, year: number}>;
+
+    getCategoryBudget: (category: string) => number;
+    getTotalCategoryExpenses: (category: string, month?: number, year?: number) => number;
+    getCategoryExpensePercentage: (category: string) => number;
+    getOverBudgetCategories: () => Array<{category: string, spent: number, limit: number}>;
+    getAllUniqueCategories: () => string[];
+
+    addNotification: (message: string, type: 'warning' | 'error' | 'success') => void;
+    removeNotification: (id: string) => void;
 }
+
+// Hàm khởi tạo Auth state mặc định
+const initialAuthState: AuthState = {
+    token: null,
+    user: null,
+    isAuthenticated: false,
+};
+
+// Hàm khởi tạo Data state mặc định
+const initialDataState = {
+    transactions: [],
+    categoryBudgets: [],
+    lastTransactionDate: new Date().toISOString().split('T')[0],
+};
+
 
 export const useExpenseStore = create<ExpenseState>()(
   persist(
     (set, get) => ({
-      transactions: [],
-      budgetLimit: 5000000, 
-      categoryBudgets: [],
+      // === STATE ===
+      ...initialAuthState, // Khởi tạo Auth State
+      ...initialDataState, // Khởi tạo Data State
       notifications: [],
-      lastTransactionDate: new Date().toISOString().split('T')[0],
+      
+      login: (token, user) => {
+          set({ token, user, isAuthenticated: true });
+          get().addNotification(`Chào mừng, ${user.username}!`, 'success');
+      },
+      logout: () => {
+          set(initialAuthState); // Reset Auth State
+          set(initialDataState); // Reset Data State khi đăng xuất
+          get().addNotification('Đã đăng xuất thành công.', 'success');
+      },
 
-      // --- ACTIONS ---
       addNotification: (message, type) => {
           const newNotification: Notification = { id: uuidv4(), message, type };
           set((state) => ({
@@ -73,7 +102,7 @@ export const useExpenseStore = create<ExpenseState>()(
           transactions: [transactionWithId, ...state.transactions],
           lastTransactionDate: newTransaction.date,
         }));
-
+        
         const totalLimit = get().getTotalCategoryLimit();
         const { categoryBudgets } = get();
         
@@ -150,7 +179,6 @@ export const useExpenseStore = create<ExpenseState>()(
           return get().categoryBudgets.reduce((sum, cb) => sum + cb.limit, 0);
       },
       
-      // HÀM MỚI: Lấy tổng chi tiêu của một tháng/năm cụ thể
       getTotalMonthlyExpenses: (month: number, year: number) => {
         return get().transactions
           .filter(t => {
@@ -164,7 +192,6 @@ export const useExpenseStore = create<ExpenseState>()(
           .reduce((sum, item) => sum + item.amount, 0);
       },
       
-      // Cập nhật hàm getTotalExpenses để gọi hàm mới (lấy chi tiêu tháng hiện tại)
       getTotalExpenses: () => {
         const now = new Date();
         return get().getTotalMonthlyExpenses(now.getMonth(), now.getFullYear());
@@ -236,7 +263,6 @@ export const useExpenseStore = create<ExpenseState>()(
           return uniqueCategories.sort((a, b) => a.localeCompare(b, 'vi', { sensitivity: 'base' }));
       },
       
-      // SELECTOR MỚI: Lấy danh sách các tháng/năm có dữ liệu
       getAvailableReportPeriods: () => {
           const periods = get().transactions
               .filter(t => t.type === 'expense')
@@ -267,6 +293,12 @@ export const useExpenseStore = create<ExpenseState>()(
     {
       name: 'expense-storage',
       storage: createJSONStorage(() => localStorage),
+      // CHỈ LƯU TRỮ DỮ LIỆU CHÍNH, KHÔNG LƯU TOKEN VÀ AUTH STATE TRONG PERSIST
+      partialize: (state) => ({ 
+          transactions: state.transactions,
+          categoryBudgets: state.categoryBudgets,
+          lastTransactionDate: state.lastTransactionDate,
+      })
     }
   )
 );

@@ -1,6 +1,11 @@
 import { useState, useMemo, useEffect } from 'react';
-import { X, Check, ArrowDownCircle } from 'lucide-react'; // BỎ Wallet
+import { X, Check, ArrowDownCircle } from 'lucide-react';
 import { useExpenseStore } from '../store/useExpenseStore';
+
+// CÁC IMPORT MỚI CHO DATE PICKER
+import DatePicker from 'react-datepicker';
+import 'react-datepicker/dist/react-datepicker.css'; // Import CSS
+import { parseISO, format, isValid } from 'date-fns'; // Dùng để xử lý ngày tháng
 
 interface Props {
   isOpen: boolean;
@@ -11,21 +16,21 @@ export const AddTransactionModal = ({ isOpen, onClose }: Props) => {
   const addTransaction = useExpenseStore((state) => state.addTransaction);
   const getAllUniqueCategories = useExpenseStore(state => state.getAllUniqueCategories);
   const addNotification = useExpenseStore(state => state.addNotification);
-  // LẤY NGÀY CUỐI CÙNG TỪ STORE
-  const lastTransactionDate = useExpenseStore(state => state.lastTransactionDate); 
+  const lastTransactionDate = useExpenseStore(state => state.lastTransactionDate);
 
   const [amount, setAmount] = useState('');
   const [categoryInput, setCategoryInput] = useState('');
-  // KHỞI TẠO DATE BẰNG NGÀY CUỐI CÙNG
-  const [date, setDate] = useState(lastTransactionDate); 
+  // Khởi tạo state date bằng Date object (parseISO cần thiết để chuyển string ISO thành Date object)
+  const [date, setDate] = useState(parseISO(lastTransactionDate));
   const [note, setNote] = useState('');
   const [showSuggestions, setShowSuggestions] = useState(false);
 
   // Dùng useEffect để đồng bộ date khi modal mở
   useEffect(() => {
-      if (isOpen) {
-          setDate(lastTransactionDate);
-      }
+    if (isOpen) {
+      // Đảm bảo lấy ngày mới nhất từ Store
+      setDate(parseISO(lastTransactionDate));
+    }
   }, [isOpen, lastTransactionDate]);
 
 
@@ -39,11 +44,11 @@ export const AddTransactionModal = ({ isOpen, onClose }: Props) => {
   const init = () => {
     setAmount('');
     setCategoryInput('');
-    setDate(lastTransactionDate); // Reset về ngày giao dịch cuối cùng
+    setDate(parseISO(lastTransactionDate));
     setNote('');
     setShowSuggestions(false);
   };
-  
+
   // Hàm xử lý khi đóng modal
   const handleClose = () => {
     init();
@@ -58,29 +63,36 @@ export const AddTransactionModal = ({ isOpen, onClose }: Props) => {
     const finalAmount = Number(value);
     const finalCategory = categoryInput.trim();
 
+    // Kiểm tra tính hợp lệ của ngày
+    if (!date || !isValid(date)) {
+      addNotification('Vui lòng chọn ngày giao dịch hợp lệ!', 'error');
+      return;
+    }
+
     if (finalAmount <= 0 || !finalCategory) {
-        addNotification('Vui lòng nhập số tiền và danh mục hợp lệ!', 'error');
-        return;
+      addNotification('Vui lòng nhập số tiền và danh mục hợp lệ!', 'error');
+      return;
     }
 
     addTransaction({
       amount: finalAmount,
       category: finalCategory,
-      date,
+      // Format lại Date object thành string 'YYYY-MM-DD' để lưu vào Store
+      date: format(date, 'yyyy-MM-dd'),
       note,
       type: 'expense', // CỐ ĐỊNH LÀ 'expense'
     });
-    
+
     addNotification(`Đã thêm khoản chi ${finalAmount.toLocaleString('vi-VN')}đ!`, 'success');
-    handleClose(); 
+    handleClose();
   };
-  
+
   // Logic format tiền tệ khi nhập
   const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const raw = e.target.value.replace(/\D/g, '');
     setAmount(raw ? Number(raw).toLocaleString('vi-VN') : '');
   };
-  
+
   // Logic hiển thị khi blur/focus
   const handleAmountBlur = (e: React.FocusEvent<HTMLInputElement>) => {
     const raw = e.target.value.replace(/\./g, '');
@@ -97,7 +109,7 @@ export const AddTransactionModal = ({ isOpen, onClose }: Props) => {
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-xl w-full max-w-md shadow-2xl overflow-hidden">
-        
+
         {/* Header (Chỉ Chi tiêu) */}
         <div className="px-6 py-4 border-b flex justify-between items-center bg-red-500 text-white">
           <h3 className="text-lg font-bold flex items-center gap-2">
@@ -110,7 +122,7 @@ export const AddTransactionModal = ({ isOpen, onClose }: Props) => {
 
         {/* Body Form */}
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
-          
+
           {/* SỐ TIỀN */}
           <div>
             <label className="block text-xs font-medium text-gray-500 mb-1">Số tiền chi ra (VNĐ)</label>
@@ -136,12 +148,12 @@ export const AddTransactionModal = ({ isOpen, onClose }: Props) => {
                 required
                 value={categoryInput}
                 onChange={(e) => {
-                    setCategoryInput(e.target.value);
-                    setShowSuggestions(true);
+                  setCategoryInput(e.target.value);
+                  setShowSuggestions(true);
                 }}
                 onFocus={() => setShowSuggestions(true)}
                 onBlur={() => {
-                  setTimeout(() => setShowSuggestions(false), 200); 
+                  setTimeout(() => setShowSuggestions(false), 200);
                 }}
                 placeholder="Nhập danh mục..."
                 className="w-full px-4 py-2.5 rounded-xl border border-gray-300 focus:border-red-500 focus:ring-2 focus:ring-red-100 outline-none"
@@ -159,33 +171,39 @@ export const AddTransactionModal = ({ isOpen, onClose }: Props) => {
                           setCategoryInput(c);
                           setShowSuggestions(false);
                         }}
-                        className="px-4 py-2 cursor-pointer hover:bg-red-50" 
+                        className="px-4 py-2 cursor-pointer hover:bg-red-50"
                       >
                         {c}
                       </li>
                     ))}
 
-                  {dynamicCategories.filter(c => 
+                  {dynamicCategories.filter(c =>
                     c.toLowerCase().includes(categoryInput.toLowerCase())
                   ).length === 0 && (
-                    <li className="px-4 py-2 text-gray-400 italic">
-                      Không có gợi ý
-                    </li>
-                  )}
+                      <li className="px-4 py-2 text-gray-400 italic">
+                        Không có gợi ý
+                      </li>
+                    )}
                 </ul>
               )}
             </div>
 
-            {/* Thời gian */}
+            {/* THỜI GIAN: DATE PICKER MỚI */}
             <div>
               <label className="block text-xs font-medium text-gray-500 mb-1">Thời gian</label>
-              <input
-                type="date"
-                required
-                value={date}
-                onChange={(e) => setDate(e.target.value)}
+
+              <DatePicker
+                selected={date} // Giá trị hiện tại (Date object)
+                onChange={(newDate: Date | null) => {
+                  if (newDate) setDate(newDate);
+                }}
+                dateFormat="dd/MM/yyyy" // Định dạng hiển thị
                 className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:border-red-500 focus:ring-2 focus:ring-red-100 outline-none cursor-pointer"
+                placeholderText="dd/mm/yyyy"
+                showYearDropdown // Cho phép chọn năm nhanh
+                dropdownMode="select"
               />
+
             </div>
           </div>
 

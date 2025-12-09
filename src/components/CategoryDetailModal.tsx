@@ -1,6 +1,6 @@
 import { X, Calendar, FileText, DollarSign } from 'lucide-react';
 import { useExpenseStore } from '../store/useExpenseStore';
-import type { Transaction } from '../types/types';
+
 
 interface CategoryDetailModalProps {
   isOpen: boolean;
@@ -131,7 +131,7 @@ export const CategoryDetailModal = ({
           ) : (
             filteredTransactions
               .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-              .map((t, index) => (
+              .map((t) => (
                 <div 
                   key={t.id} 
                   className="px-6 py-4 border-b hover:bg-gray-50 transition-colors grid grid-cols-12 gap-4 items-center"

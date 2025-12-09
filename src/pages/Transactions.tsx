@@ -1,8 +1,8 @@
 import { useState, useMemo } from 'react';
-import { Search, Trash2, ArrowDownCircle, Filter, ChevronDown, ChevronRight, Calendar } from 'lucide-react'; // THÊM ICON CALENDAR
+import { Search, Trash2, ArrowDownCircle, Filter, ChevronDown, ChevronRight, Calendar } from 'lucide-react';
 import { useExpenseStore } from '../store/useExpenseStore';
 import { CategoryDetailModal } from '../components/CategoryDetailModal';
-import type { Transaction } from '../types/types';
+import type { Transaction } from '../types/types'; // KHẮC PHỤC LỖI TS2552
 
 const Transactions = () => {
   const { transactions, removeTransaction, getCategoryBudget } = useExpenseStore();
@@ -15,14 +15,17 @@ const Transactions = () => {
     type: 'expense';
   } | null>(null);
 
-  // === STATE MỚI CHO BỘ LỌC NGÀY ===
+  // === STATE CHO BỘ LỌC NGÀY (DATE RANGE PICKER) ===
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
 
   // Hàm chuẩn hóa ngày để so sánh
   const normalizeDate = (dateString: string) => {
     if (!dateString) return null;
-    return new Date(dateString).getTime();
+    // Chuyển về 00:00:00 của ngày đó để so sánh chính xác
+    const date = new Date(dateString);
+    date.setHours(0, 0, 0, 0);
+    return date.getTime();
   };
 
   // Logic lọc dữ liệu
@@ -35,28 +38,29 @@ const Transactions = () => {
             // 1. Loại bỏ Thu nhập
             if (t.type === 'income') return false; 
             
-            const transactionTimestamp = normalizeDate(t.date);
+            const transactionDate = new Date(t.date);
+            transactionDate.setHours(0, 0, 0, 0);
+            const transactionTimestamp = transactionDate.getTime();
 
             // 2. Lọc theo Ngày (Date Range)
             const matchesDateRange = 
                 (!startTimestamp || transactionTimestamp >= startTimestamp) &&
-                (!endTimestamp || transactionTimestamp <= endTimestamp + 86400000); // Thêm 1 ngày để bao gồm ngày kết thúc
+                (!endTimestamp || transactionTimestamp <= endTimestamp);
 
             // 3. Lọc theo Từ khóa
             const matchesSearch = 
               t.note?.toLowerCase().includes(searchTerm.toLowerCase()) || 
               t.category.toLowerCase().includes(searchTerm.toLowerCase());
             
-            // 4. Lọc theo Loại (Expense - luôn là true vì đã lọc ở bước 1)
+            // 4. Lọc theo Loại (Expense - luôn là true)
             const matchesType = filterType === 'all' || t.type === filterType;
 
             return matchesDateRange && matchesSearch && matchesType;
         });
   }, [transactions, searchTerm, filterType, startDate, endDate]);
 
-  // Nhóm giao dịch theo danh mục và tháng (Logic giữ nguyên)
+  // Nhóm giao dịch theo danh mục và tháng
   const groupedTransactions = useMemo(() => {
-    // ... (logic nhóm giao dịch giữ nguyên) ...
     const groups: Record<string, {
       category: string;
       type: 'expense';

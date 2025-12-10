@@ -1,3 +1,4 @@
+// src/store/useExpenseStore.ts
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { v4 as uuidv4 } from 'uuid';
@@ -20,8 +21,9 @@ interface ExpenseState {
     notifications: Notification[];
     lastTransactionDate: string; 
 
-    login: (token: string, user: UserInfo) => void;
-    logout: () => void;
+    // ===== CẬP NHẬT: Login giờ gọi API thật =====
+    login: (username: string, password: string) => Promise<{ success: boolean; message?: string }>;
+    logout: () => Promise<void>;
 
     addTransaction: (transaction: Omit<Transaction, 'id'>) => void;
     removeTransaction: (id: string) => void;
@@ -66,17 +68,65 @@ export const useExpenseStore = create<ExpenseState>()(
   persist(
     (set, get) => ({
       // === STATE ===
-      ...initialAuthState, // Khởi tạo Auth State
-      ...initialDataState, // Khởi tạo Data State
+      ...initialAuthState,
+      ...initialDataState,
       notifications: [],
       
-      login: (token, user) => {
-          set({ token, user, isAuthenticated: true });
-          get().addNotification(`Chào mừng, ${user.username}!`, 'success');
+      // ===== CẬP NHẬT: LOGIN GỌI API THẬT =====
+      login: async (username: string, password: string) => {
+          try {
+              const { authAPI, transactionAPI, budgetAPI } = await import('../services/api');
+              
+              // Gọi API login
+              const data = await authAPI.login(username, password);
+              
+              if (data.success && data.token && data.user) {
+                  set({ 
+                      token: data.token, 
+                      user: data.user, 
+                      isAuthenticated: true 
+                  });
+                  
+                  // Load dữ liệu từ server
+                  try {
+                      const [transactionsData, budgetsData] = await Promise.all([
+                          transactionAPI.getAll(),
+                          budgetAPI.getAll()
+                      ]);
+                      
+                      if (transactionsData.success) {
+                          set({ transactions: transactionsData.transactions });
+                      }
+                      
+                      if (budgetsData.success) {
+                          set({ categoryBudgets: budgetsData.budgets });
+                      }
+                  } catch (loadError) {
+                      console.error('Load data error:', loadError);
+                  }
+                  
+                  get().addNotification(`Chào mừng, ${data.user.username}!`, 'success');
+                  return { success: true };
+              }
+              
+              return { success: false, message: 'Login failed' };
+          } catch (error: any) {
+              get().addNotification(error.message || 'Đăng nhập thất bại!', 'error');
+              return { success: false, message: error.message };
+          }
       },
-      logout: () => {
-          set(initialAuthState); // Reset Auth State
-          set(initialDataState); // Reset Data State khi đăng xuất
+      
+      // ===== CẬP NHẬT: LOGOUT XÓA TOKEN =====
+      logout: async () => {
+          try {
+              const { authAPI } = await import('../services/api');
+              authAPI.logout(); // Xóa token khỏi localStorage
+          } catch (error) {
+              console.error('Logout error:', error);
+          }
+          
+          set(initialAuthState);
+          set(initialDataState);
           get().addNotification('Đã đăng xuất thành công.', 'success');
       },
 

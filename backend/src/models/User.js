@@ -1,6 +1,7 @@
-// backend/src/models/User.js
+// backend/src/models/User.js - UPDATED
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
 
 const UserSchema = new mongoose.Schema({
   username: {
@@ -15,12 +16,26 @@ const UserSchema = new mongoose.Schema({
     type: String,
     trim: true,
     lowercase: true,
-    match: [/^\S+@\S+\.\S+$/, 'Please enter a valid email']
+    match: [/^\S+@\S+\.\S+$/, 'Please enter a valid email'],
+    index: true // Thêm index cho email để tìm kiếm nhanh hơn
   },
   password: {
     type: String,
     required: [true, 'Password is required'],
     minlength: [6, 'Password must be at least 6 characters']
+  },
+  // Thêm fields cho password reset
+  resetPasswordToken: String,
+  resetPasswordExpires: Date,
+  // Thêm field cho terms acceptance
+  acceptedTerms: {
+    type: Boolean,
+    default: false
+  },
+  // Thêm last login tracking
+  lastLogin: {
+    type: Date,
+    default: null
   },
   createdAt: {
     type: Date,
@@ -32,6 +47,7 @@ const UserSchema = new mongoose.Schema({
 
 // Hash password before saving
 UserSchema.pre('save', async function(next) {
+  // Only hash the password if it's modified (or new)
   if (!this.isModified('password')) return next();
   
   try {
@@ -48,10 +64,35 @@ UserSchema.methods.comparePassword = async function(candidatePassword) {
   return await bcrypt.compare(candidatePassword, this.password);
 };
 
-// Remove password from JSON response
+// Generate password reset token
+UserSchema.methods.generatePasswordResetToken = function() {
+  // Generate token
+  const resetToken = crypto.randomBytes(32).toString('hex');
+  
+  // Hash token and set to resetPasswordToken field
+  this.resetPasswordToken = crypto
+    .createHash('sha256')
+    .update(resetToken)
+    .digest('hex');
+  
+  // Set expire (10 minutes)
+  this.resetPasswordExpires = Date.now() + 10 * 60 * 1000;
+  
+  return resetToken;
+};
+
+// Clear reset token after use
+UserSchema.methods.clearResetToken = function() {
+  this.resetPasswordToken = undefined;
+  this.resetPasswordExpires = undefined;
+};
+
+// Remove sensitive data from JSON response
 UserSchema.methods.toJSON = function() {
   const user = this.toObject();
   delete user.password;
+  delete user.resetPasswordToken;
+  delete user.resetPasswordExpires;
   return user;
 };
 

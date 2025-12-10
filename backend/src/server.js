@@ -4,13 +4,16 @@ const mongoose = require('mongoose');
 const cors = require('cors');
 const dotenv = require('dotenv');
 
+
 // Load environment variables
 dotenv.config();
 
 // Import routes
+const passwordResetRoutes = require('./routes/passwordReset');
 const authRoutes = require('./routes/auth');
 const transactionRoutes = require('./routes/transactions');
 const budgetRoutes = require('./routes/budgets');
+
 
 const app = express();
 
@@ -31,7 +34,7 @@ mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/expense-t
 app.use('/api/auth', authRoutes);
 app.use('/api/transactions', transactionRoutes);
 app.use('/api/budgets', budgetRoutes);
-
+app.use('/api/password-reset', passwordResetRoutes);
 // Health check route
 app.get('/', (req, res) => {
   res.json({ 

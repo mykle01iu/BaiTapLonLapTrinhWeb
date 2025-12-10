@@ -3,6 +3,8 @@ import type { Transaction, CategoryBudget, UserInfo } from '../types/types';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
+console.log('🔗 API_URL configured:', API_URL);
+
 // Helper function để lấy token từ localStorage
 const getAuthToken = (): string | null => {
   return localStorage.getItem('auth-token');
@@ -19,57 +21,128 @@ const getAuthHeaders = (): HeadersInit => {
 
 // Handle API errors
 const handleResponse = async (response: Response) => {
-  const data = await response.json();
+  let data;
   
-  if (!response.ok) {
-    throw new Error(data.message || 'Something went wrong');
+  try {
+    data = await response.json();
+  } catch (parseError) {
+    console.error('❌ Failed to parse response:', parseError);
+    throw new Error('Invalid response from server');
   }
   
+  if (!response.ok) {
+    console.error('❌ API Error:', response.status, data?.message || 'Unknown error');
+    throw new Error(data?.message || `HTTP ${response.status}: Something went wrong`);
+  }
+  
+  console.log('✅ API Success:', response.status, data);
   return data;
 };
 
 // ============= AUTH API =============
 
 export const authAPI = {
-  register: async (username: string, password: string, email?: string) => {
-    const response = await fetch(`${API_URL}/auth/register`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, password, email })
-    });
+  register: async (
+    username: string,
+    password: string,
+    email?: string,
+    acceptTerms?: boolean
+  ) => {
+    console.log('📤 Registering user:', { username, email, acceptTerms });
+    console.log('📍 Fetch URL:', `${API_URL}/auth/register`);
     
-    const data = await handleResponse(response);
-    
-    // Lưu token vào localStorage
-    if (data.token) {
-      localStorage.setItem('auth-token', data.token);
+    try {
+      const response = await fetch(`${API_URL}/auth/register`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username,
+          password,
+          email,
+          acceptTerms: acceptTerms || false
+        })
+      });
+
+      console.log('📥 Response received:', response.status, response.statusText);
+
+      const data = await handleResponse(response);
+
+      // Lưu token vào localStorage
+      if (data.token) {
+        localStorage.setItem('auth-token', data.token);
+      }
+
+      return data;
+    } catch (error: any) {
+      console.error('❌ Register failed:', error.message);
+      console.error('❌ Full error:', error);
+      throw error;
     }
-    
-    return data;
   },
 
   login: async (username: string, password: string) => {
-    const response = await fetch(`${API_URL}/auth/login`, {
+    console.log('📤 Logging in user:', { username });
+    console.log('📍 Fetch URL:', `${API_URL}/auth/login`);
+    
+    try {
+      const response = await fetch(`${API_URL}/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password })
+      });
+
+      console.log('📥 Response received:', response.status, response.statusText);
+
+      const data = await handleResponse(response);
+
+      // Lưu token vào localStorage
+      if (data.token) {
+        localStorage.setItem('auth-token', data.token);
+      }
+
+      return data;
+    } catch (error: any) {
+      console.error('❌ Login failed:', error.message);
+      console.error('❌ Full error:', error);
+      throw error;
+    }
+  },
+
+  requestPasswordReset: async (email: string) => {
+    const response = await fetch(`${API_URL}/password-reset/request`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, password })
+      body: JSON.stringify({ email })
     });
-    
-    const data = await handleResponse(response);
-    
-    // Lưu token vào localStorage
-    if (data.token) {
-      localStorage.setItem('auth-token', data.token);
-    }
-    
-    return data;
+
+    return handleResponse(response);
+  },
+
+  validateResetToken: async (token: string) => {
+    const response = await fetch(`${API_URL}/password-reset/validate-token`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token })
+    });
+
+    return handleResponse(response);
+  },
+
+  resetPassword: async (token: string, newPassword: string) => {
+    const response = await fetch(`${API_URL}/password-reset/reset`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token, newPassword })
+    });
+
+    return handleResponse(response);
   },
 
   getCurrentUser: async (): Promise<{ success: boolean; user: UserInfo }> => {
     const response = await fetch(`${API_URL}/auth/me`, {
       headers: getAuthHeaders()
     });
-    
+
     return handleResponse(response);
   },
 

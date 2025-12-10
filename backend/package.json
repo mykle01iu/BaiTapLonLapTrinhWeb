@@ -19,6 +19,7 @@
   "author": "Your Name",
   "license": "MIT",
   "dependencies": {
+    "nodemailer": "^6.9.14",
     "express": "^4.18.2",
     "mongoose": "^8.0.0",
     "bcryptjs": "^2.4.3",

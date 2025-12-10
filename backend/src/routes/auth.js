@@ -11,13 +11,21 @@ const router = express.Router();
 // @access  Public
 router.post('/register', async (req, res) => {
   try {
-    const { username, password, email } = req.body;
+    const { username, password, email, acceptTerms } = req.body;
 
     // Validation
     if (!username || !password) {
       return res.status(400).json({ 
         success: false, 
-        message: 'Username and password are required' 
+        message: 'Username và mật khẩu là bắt buộc' 
+      });
+    }
+
+    // Check if terms are accepted
+    if (acceptTerms !== true) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Bạn phải đồng ý với Điều khoản dịch vụ và Chính sách bảo mật.' 
       });
     }
 
@@ -30,11 +38,12 @@ router.post('/register', async (req, res) => {
       });
     }
 
-    // Create new user
+    // Create new user với acceptedTerms
     const user = new User({
       username,
       password,
-      email: email || undefined
+      email: email || undefined,
+      acceptedTerms: true
     });
 
     await user.save();
